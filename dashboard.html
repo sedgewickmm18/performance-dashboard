@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0e1117;
+      --surface: #161b22;
+      --surface2: #1e2733;
+      --border: #2a3441;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --accent-cpu: #58a6ff;
+      --accent-mem: #3fb950;
+      --accent-disk: #f78166;
+      --accent-net: #d2a8ff;
+      --accent-gpu: #ffa657;
+      --chart-cpu: #1f6feb;
+      --chart-mem: #238636;
+      --chart-disk: #da3633;
+      --chart-net: #8250df;
+      --chart-gpu: #bf8700;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --radius: 8px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    header .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    header .brand svg { opacity: .85; }
+    header .meta {
+      display: flex;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    header .meta span b { color: var(--text); font-weight: 500; }
+    #clock { font-size: 13px; color: var(--muted); }
+
+    /* ── Tab bar ─────────────────────────────────── */
+    nav {
+      display: flex;
+      gap: 2px;
+      padding: 8px 20px 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    nav button {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      padding: 6px 14px 8px;
+      transition: color .15s, border-color .15s;
+    }
+    nav button:hover { color: var(--text); }
+    nav button.active { color: var(--accent-cpu); border-bottom-color: var(--accent-cpu); }
+
+    /* ── Main layout ─────────────────────────────── */
+    main {
+      flex: 1;
+      padding: 16px 20px;
+      overflow-y: auto;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Overview grid ───────────────────────────── */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 14px;
+    }
+
+    /* ── Metric card ─────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+    }
+    .card-value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .card-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: -4px;
+    }
+
+    /* ── Sparkline canvas ────────────────────────── */
+    canvas.sparkline {
+      width: 100%;
+      height: 70px;
+      display: block;
+      border-radius: 4px;
+    }
+
+    /* ── Gauge bar ───────────────────────────────── */
+    .gauge-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .gauge-track {
+      flex: 1;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .4s ease;
+    }
+    .gauge-pct { font-size: 12px; color: var(--muted); min-width: 34px; text-align: right; }
+
+    /* ── Info row ────────────────────────────────── */
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 2px 0;
+      border-top: 1px solid var(--border);
+    }
+    .info-row span:last-child { color: var(--text); }
+
+    /* ── Processes table ─────────────────────────── */
+    .proc-table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .proc-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .proc-controls input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      padding: 6px 10px;
+      outline: none;
+    }
+    .proc-controls input:focus { border-color: var(--accent-cpu); }
+    .proc-controls label { color: var(--muted); font-size: 12px; }
+    .proc-controls select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      padding: 5px 8px;
+      outline: none;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead th {
+      background: var(--surface2);
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { color: var(--text); }
+    thead th.sort-asc::after { content: ' ↑'; }
+    thead th.sort-desc::after { content: ' ↓'; }
+
+    tbody tr {
+      border-top: 1px solid var(--border);
+      transition: background .1s;
+    }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td {
+      padding: 7px 12px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .td-name { color: var(--text); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    .td-pid { color: var(--muted); }
+    .td-num { font-variant-numeric: tabular-nums; color: var(--text); }
+    .td-bar { width: 80px; }
+    .mini-bar { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+    .mini-fill { height: 100%; border-radius: 2px; transition: width .5s; }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge-running { background: #0d2b0e; color: var(--green); }
+    .badge-sleeping { background: #1a1f2e; color: var(--accent-cpu); }
+    .badge-idle    { background: #1e1e28; color: var(--muted); }
+
+    /* ── Sidebar layout for performance tab ─────── */
+    .perf-layout {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 14px;
+    }
+    .perf-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .perf-nav-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: border-color .15s;
+    }
+    .perf-nav-item:hover, .perf-nav-item.active { border-color: var(--accent-cpu); }
+    .perf-nav-item .pni-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .perf-nav-item .pni-value { font-size: 18px; font-weight: 700; }
+    .perf-nav-mini { height: 28px; }
+
+    .perf-detail {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .perf-detail h2 { font-size: 14px; font-weight: 600; }
+    .perf-detail canvas { width: 100%; height: 200px; display: block; border-radius: 4px; }
+    .perf-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .perf-stat {
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .perf-stat .ps-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .perf-stat .ps-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+
+    /* ── Utility ────────────────────────────────── */
+    .color-cpu  { color: var(--accent-cpu); }
+    .color-mem  { color: var(--accent-mem); }
+    .color-disk { color: var(--accent-disk); }
+    .color-net  { color: var(--accent-net); }
+    .color-gpu  { color: var(--accent-gpu); }
+
+    .fill-cpu  { background: var(--chart-cpu); }
+    .fill-mem  { background: var(--chart-mem); }
+    .fill-disk { background: var(--chart-disk); }
+    .fill-net  { background: var(--chart-net); }
+    .fill-gpu  { background: var(--chart-gpu); }
+
+    .stroke-cpu  { stroke: var(--accent-cpu); }
+    .stroke-mem  { stroke: var(--accent-mem); }
+    .stroke-disk { stroke: var(--accent-disk); }
+    .stroke-net  { stroke: var(--accent-net); }
+    .stroke-gpu  { stroke: var(--accent-gpu); }
+
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 6px 20px;
+      display: flex;
+      gap: 24px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    footer span b { color: var(--text); font-weight: 500; }
+
+    @media (max-width: 700px) {
+      .perf-layout { grid-template-columns: 1fr; }
+      .perf-sidebar { flex-direction: row; flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cpu)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>
+    System Dashboard
+  </div>
+  <div class="meta">
+    <span>CPU <b id="hdr-cpu">—</b></span>
+    <span>Memory <b id="hdr-mem">—</b></span>
+    <span>Disk <b id="hdr-disk">—</b></span>
+    <span>Net <b id="hdr-net">—</b></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span id="api-badge" style="display:none;font-size:11px;background:#0d2b0e;color:#3fb950;border:1px solid #238636;border-radius:4px;padding:2px 8px;font-weight:600;letter-spacing:.04em;">● LIVE</span>
+    <div id="clock">—</div>
+  </div>
+</header>
+
+<nav>
+  <button class="active" data-tab="overview">Overview</button>
+  <button data-tab="performance">Performance</button>
+  <button data-tab="processes">Processes</button>
+  <button data-tab="network">Network</button>
+  <button data-tab="about">About</button>
+</nav>
+
+<!-- ═══════════════════ OVERVIEW TAB ════════════════════ -->
+<main>
+  <div id="tab-overview" class="tab-panel active">
+    <div class="overview-grid">
+
+      <!-- CPU -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title color-cpu">CPU</span>
+          <span class="card-sub" id="cpu-cores-label">—</span>
+        </div>
+        <div class="card-value color-cpu" id="ov-cpu">—</div>
+        <div class="card-sub">Utilisation</div>
+        <canvas class="sparkline" id="spark-cpu"></canvas>
+        <div class="gauge-wrap">
+          <div class="gauge-track"><div class="gauge-fill fill-cpu" id="gauge-cpu" style="width:0%"></div></div>
+          <span class="gauge-pct" id="gp-cpu">0%</span>
+        </div>
+        <div class="info-row"><span>Logical cores</span><span id="cpu-cores">—</span></div>
+        <div class="info-row"><span>Hardware threads</span><span id="cpu-threads">—</span></div>
+        <div class="info-row"><span>Architecture</span><span id="cpu-arch">—</span></div>
+      </div>
+
+      <!-- Memory -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title color-mem">Memory</span>
+          <span class="card-sub">RAM</span>
+        </div>
+        <div class="card-value color-mem" id="ov-mem">—</div>
+        <div class="card-sub" id="mem-sub">In use</div>
+        <canvas class="sparkline" id="spark-mem"></canvas>
+        <div class="gauge-wrap">
+          <div class="gauge-track"><div class="gauge-fill fill-mem" id="gauge-mem" style="width:0%"></div></div>
+          <span class="gauge-pct" id="gp-mem">0%</span>
+        </div>
+        <div class="info-row"><span>Total RAM</span><span id="mem-total">—</span></div>
+        <div class="info-row"><span>Used (est.)</span><span id="mem-used">—</span></div>
+        <div class="info-row"><span>Available (est.)</span><span id="mem-avail">—</span></div>
+      </div>
+
+      <!-- Disk / Storage -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title color-disk">Storage</span>
+          <span class="card-sub">Disk I/O activity</span>
+        </div>
+        <div class="card-value color-disk" id="ov-disk">—</div>
+        <div class="card-sub">Read / Write speed</div>
+        <canvas class="sparkline" id="spark-disk"></canvas>
+        <div class="gauge-wrap">
+          <div class="gauge-track"><div class="gauge-fill fill-disk" id="gauge-disk" style="width:0%"></div></div>
+          <span class="gauge-pct" id="gp-disk">0%</span>
+        </div>
+        <div class="info-row"><span>Read rate</span><span id="disk-read">—</span></div>
+        <div class="info-row"><span>Write rate</span><span id="disk-write">—</span></div>
+        <div class="info-row"><span>Active time (est.)</span><span id="disk-active">—</span></div>
+      </div>
+
+      <!-- Network -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title color-net">Network</span>
+          <span class="card-sub" id="net-iface">eth0</span>
+        </div>
+        <div class="card-value color-net" id="ov-net">—</div>
+        <div class="card-sub">Send + Receive</div>
+        <canvas class="sparkline" id="spark-net"></canvas>
+        <div class="gauge-wrap">
+          <div class="gauge-track"><div class="gauge-fill fill-net" id="gauge-net" style="width:0%"></div></div>
+          <span class="gauge-pct" id="gp-net">0%</span>
+        </div>
+        <div class="info-row"><span>Download</span><span id="net-dl">—</span></div>
+        <div class="info-row"><span>Upload</span><span id="net-ul">—</span></div>
+        <div class="info-row"><span>Total transferred</span><span id="net-total">—</span></div>
+      </div>
+
+      <!-- GPU (simulated) -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title color-gpu">GPU</span>
+          <span class="card-sub">WebGL renderer</span>
+        </div>
+        <div class="card-value color-gpu" id="ov-gpu">—</div>
+        <div class="card-sub" id="gpu-name">Detecting…</div>
+        <canvas class="sparkline" id="spark-gpu"></canvas>
+        <div class="gauge-wrap">
+          <div class="gauge-track"><div class="gauge-fill fill-gpu" id="gauge-gpu" style="width:0%"></div></div>
+          <span class="gauge-pct" id="gp-gpu">0%</span>
+        </div>
+        <div class="info-row"><span>Renderer</span><span id="gpu-renderer">—</span></div>
+        <div class="info-row"><span>Vendor</span><span id="gpu-vendor">—</span></div>
+        <div class="info-row"><span>VRAM (est.)</span><span id="gpu-vram">—</span></div>
+      </div>
+
+      <!-- Browser / JS Heap -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--accent-net)">JS Heap</span>
+          <span class="card-sub">Browser memory</span>
+        </div>
+        <div class="card-value" style="color:var(--accent-net)" id="ov-heap">—</div>
+        <div class="card-sub">Heap used</div>
+        <canvas class="sparkline" id="spark-heap"></canvas>
+        <div class="gauge-wrap">
+          <div class="gauge-track"><div class="gauge-fill fill-net" id="gauge-heap" style="width:0%"></div></div>
+          <span class="gauge-pct" id="gp-heap">0%</span>
+        </div>
+        <div class="info-row"><span>Heap used</span><span id="heap-used">—</span></div>
+        <div class="info-row"><span>Heap total</span><span id="heap-total">—</span></div>
+        <div class="info-row"><span>Heap limit</span><span id="heap-limit">—</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════ PERFORMANCE TAB ════════════════════ -->
+  <div id="tab-performance" class="tab-panel">
+    <div class="perf-layout">
+      <div class="perf-sidebar" id="perf-sidebar">
+        <div class="perf-nav-item active" data-metric="cpu">
+          <span class="pni-label">CPU</span>
+          <span class="pni-value color-cpu" id="pni-cpu">—</span>
+          <canvas class="perf-nav-mini" id="pnc-cpu"></canvas>
+        </div>
+        <div class="perf-nav-item" data-metric="mem">
+          <span class="pni-label">Memory</span>
+          <span class="pni-value color-mem" id="pni-mem">—</span>
+          <canvas class="perf-nav-mini" id="pnc-mem"></canvas>
+        </div>
+        <div class="perf-nav-item" data-metric="net">
+          <span class="pni-label">Network</span>
+          <span class="pni-value color-net" id="pni-net">—</span>
+          <canvas class="perf-nav-mini" id="pnc-net"></canvas>
+        </div>
+        <div class="perf-nav-item" data-metric="disk">
+          <span class="pni-label">Disk</span>
+          <span class="pni-value color-disk" id="pni-disk">—</span>
+          <canvas class="perf-nav-mini" id="pnc-disk"></canvas>
+        </div>
+        <div class="perf-nav-item" data-metric="gpu">
+          <span class="pni-label">GPU</span>
+          <span class="pni-value color-gpu" id="pni-gpu">—</span>
+          <canvas class="perf-nav-mini" id="pnc-gpu"></canvas>
+        </div>
+      </div>
+      <div class="perf-detail" id="perf-detail">
+        <h2 id="pd-title">CPU</h2>
+        <canvas id="pd-canvas" height="200"></canvas>
+        <div class="perf-stats-grid" id="pd-stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ PROCESSES TAB ════════════════════ -->
+  <div id="tab-processes" class="tab-panel">
+    <div class="proc-table-wrap">
+      <div class="proc-controls">
+        <input id="proc-search" type="text" placeholder="Filter by name…" />
+        <label for="proc-sort">Sort by</label>
+        <select id="proc-sort">
+          <option value="cpu">CPU</option>
+          <option value="mem">Memory</option>
+          <option value="name">Name</option>
+          <option value="pid">PID</option>
+        </select>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>PID</th>
+            <th>Status</th>
+            <th>CPU %</th>
+            <th></th>
+            <th>Memory</th>
+            <th></th>
+            <th>Type</th>
+          </tr>
+        </thead>
+        <tbody id="proc-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ NETWORK TAB ════════════════════ -->
+  <div id="tab-network" class="tab-panel">
+    <div class="overview-grid">
+      <div class="card" style="grid-column: 1/-1">
+        <div class="card-header">
+          <span class="card-title color-net">Network Throughput</span>
+          <span class="card-sub" id="net-detail-label">—</span>
+        </div>
+        <canvas class="sparkline" id="net-big-canvas" style="height:120px"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title color-net" style="margin-bottom:8px">Download</div>
+        <div class="card-value color-net" id="net-dl-big">—</div>
+        <canvas class="sparkline" id="net-dl-spark" style="height:50px"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title color-mem" style="margin-bottom:8px">Upload</div>
+        <div class="card-value color-mem" id="net-ul-big">—</div>
+        <canvas class="sparkline" id="net-ul-spark" style="height:50px"></canvas>
+      </div>
+      <div class="card">
+        <span class="card-title" style="margin-bottom:8px;display:block">Connection Info</span>
+        <div class="info-row"><span>Effective type</span><span id="net-eff-type">—</span></div>
+        <div class="info-row"><span>Downlink speed</span><span id="net-downlink">—</span></div>
+        <div class="info-row"><span>Round-trip time</span><span id="net-rtt">—</span></div>
+        <div class="info-row"><span>Save-data mode</span><span id="net-savedata">—</span></div>
+        <div class="info-row"><span>Protocol (page)</span><span id="net-proto">—</span></div>
+      </div>
+      <div class="card">
+        <span class="card-title" style="margin-bottom:8px;display:block">Resource Stats</span>
+        <div class="info-row"><span>Total entries</span><span id="res-entries">—</span></div>
+        <div class="info-row"><span>Total transferred</span><span id="res-transfer">—</span></div>
+        <div class="info-row"><span>Largest resource</span><span id="res-largest">—</span></div>
+        <div class="info-row"><span>Cached responses</span><span id="res-cached">—</span></div>
+        <div class="info-row"><span>Avg latency</span><span id="res-latency">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ ABOUT TAB ════════════════════ -->
+  <div id="tab-about" class="tab-panel" style="height:calc(100vh - 104px);">
+    <iframe
+      id="about-frame"
+      src="presentation.html"
+      style="width:100%;height:100%;border:none;border-radius:0;"
+      title="About — Bob + Chrome DevTools MCP presentation"
+    ></iframe>
+  </div>
+</main>
+
+<footer>
+  <span>Processes <b id="ft-procs">—</b></span>
+  <span>Threads <b id="ft-threads">—</b></span>
+  <span>Up <b id="ft-uptime">—</b></span>
+  <span>JS Heap <b id="ft-heap">—</b></span>
+  <span>Update interval <b>1 s</b></span>
+</footer>
+
+<script>
+"use strict";
+
+// ─────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = (n, d=1) => (typeof n === 'number' ? n.toFixed(d) : '—');
+
+function fmtBytes(bytes, per=false) {
+  if (bytes === null || bytes === undefined) return '—';
+  const units = ['B','KB','MB','GB','TB'];
+  let i = 0; let v = bytes;
+  while (v >= 1024 && i < units.length-1) { v /= 1024; i++; }
+  return v.toFixed(i === 0 ? 0 : 1) + ' ' + units[i] + (per ? '/s' : '');
+}
+
+function fmtUptime(s) {
+  const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+  return `${d}d ${h}h ${m}m`;
+}
+
+// ─────────────────────────────────────────────────
+// History ring buffer
+// ─────────────────────────────────────────────────
+const HISTORY = 60;
+function makeRing() { const a = new Array(HISTORY).fill(0); return a; }
+function pushRing(ring, val) { ring.push(val); if (ring.length > HISTORY) ring.shift(); }
+
+// ─────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────
+const state = {
+  cpu:  { pct: 0, ring: makeRing() },
+  mem:  { pct: 0, usedBytes: 0, totalBytes: 0, ring: makeRing() },
+  disk: { readBps: 0, writeBps: 0, pct: 0, ring: makeRing() },
+  net:  { dlBps: 0, ulBps: 0, pct: 0, totalBytes: 0, ring: makeRing(), dlRing: makeRing(), ulRing: makeRing() },
+  gpu:  { pct: 0, ring: makeRing() },
+  heap: { usedBytes: 0, totalBytes: 0, limitBytes: 0, ring: makeRing() },
+};
+
+// ─────────────────────────────────────────────────
+// API backend integration
+// ─────────────────────────────────────────────────
+const API = 'http://localhost:3000/api';
+let apiAvailable = false;   // set to true on first successful fetch
+let liveData = null;        // last /api/stats payload
+
+// Probe once; if it fails stay in browser-only mode
+async function probeAPI() {
+  try {
+    const r = await fetch(API + '/static', { signal: AbortSignal.timeout(1500) });
+    if (!r.ok) return;
+    const d = await r.json();
+    apiAvailable = true;
+    applyStaticInfo(d);
+  } catch { /* server not running — silent fallback */ }
+}
+
+async function fetchStats() {
+  if (!apiAvailable) return null;
+  try {
+    const r = await fetch(API + '/stats', { signal: AbortSignal.timeout(1400) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+// Populate one-shot labels from /api/static
+function applyStaticInfo(d) {
+  if (d.cpu) {
+    const c = d.cpu;
+    const label = [c.manufacturer, c.brand].filter(Boolean).join(' ') || '—';
+    $('cpu-cores-label').textContent = label.substring(0, 40);
+    $('cpu-cores').textContent   = c.cores        || '—';
+    $('cpu-threads').textContent = c.physicalCores || '—';
+    $('cpu-arch').textContent    = d.os?.arch      || navigator.platform || '—';
+  }
+  if (d.gpu && d.gpu[0]) {
+    const g = d.gpu[0];
+    $('gpu-renderer').textContent = g.model  || '—';
+    $('gpu-vendor').textContent   = g.vendor || '—';
+    $('gpu-name').textContent     = (g.model || '—').substring(0, 40);
+    $('gpu-vram').textContent     = g.vram ? g.vram + ' MB' : '—';
+  }
+  if (d.os) {
+    $('cpu-arch').textContent = d.os.arch || navigator.platform || '—';
+  }
+  // Total RAM from the OS (disks[0] has full size — use memory from first /api/stats instead;
+  // for now estimate from the largest disk if available, actual value set on first stats tick)
+  $('api-badge').style.display = 'inline';
+}
+
+// ─────────────────────────────────────────────────
+// JS Heap (always real via performance.memory)
+// ─────────────────────────────────────────────────
+function sampleHeap() {
+  const pm = performance.memory;
+  if (pm) return { used: pm.usedJSHeapSize, total: pm.totalJSHeapSize, limit: pm.jsHeapSizeLimit, pct: (pm.usedJSHeapSize/pm.jsHeapSizeLimit)*100 };
+  return { used: 0, total: 0, limit: 0, pct: 0 };
+}
+
+// ─────────────────────────────────────────────────
+// GPU info via WebGL (static labels, used when no API)
+// ─────────────────────────────────────────────────
+function getGPUInfo() {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) return { renderer: 'Unknown', vendor: 'Unknown' };
+    const dbgInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = dbgInfo ? gl.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    const vendor   = dbgInfo ? gl.getParameter(dbgInfo.UNMASKED_VENDOR_WEBGL)   : gl.getParameter(gl.VENDOR);
+    return { renderer, vendor };
+  } catch(e) { return { renderer: 'N/A', vendor: 'N/A' }; }
+}
+
+// ─────────────────────────────────────────────────
+// Browser-only network sampling (page resources)
+// ─────────────────────────────────────────────────
+let prevNetBytes = 0, prevNetTime = performance.now();
+
+function sampleBrowserNetwork() {
+  const entries = performance.getEntriesByType('resource');
+  let totalBytes = 0;
+  entries.forEach(e => { if (e.transferSize) totalBytes += e.transferSize; });
+  const now = performance.now();
+  const dt = (now - prevNetTime) / 1000;
+  const dlBps = Math.max(0, totalBytes - prevNetBytes) / Math.max(dt, 0.1);
+  prevNetBytes = totalBytes;
+  prevNetTime  = now;
+
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (conn) {
+    $('net-eff-type').textContent  = conn.effectiveType || '—';
+    $('net-downlink').textContent  = conn.downlink ? conn.downlink + ' Mbps' : '—';
+    $('net-rtt').textContent       = conn.rtt ? conn.rtt + ' ms' : '—';
+    $('net-savedata').textContent  = conn.saveData ? 'Yes' : 'No';
+  }
+  $('net-proto').textContent = location.protocol;
+
+  let cached = 0, largest = 0, latSum = 0;
+  entries.forEach(e => {
+    if (e.transferSize === 0 && e.decodedBodySize > 0) cached++;
+    if (e.transferSize > largest) largest = e.transferSize;
+    latSum += (e.responseEnd - e.requestStart);
+  });
+  $('res-entries').textContent  = entries.length;
+  $('res-transfer').textContent = fmtBytes(totalBytes);
+  $('res-largest').textContent  = fmtBytes(largest);
+  $('res-cached').textContent   = cached;
+  $('res-latency').textContent  = entries.length ? (latSum/entries.length).toFixed(1)+' ms' : '—';
+
+  return { dlBps, ulBps: 0, totalBytes };
+}
+
+// ─────────────────────────────────────────────────
+// Processes: real from API, fallback simulated list
+// ─────────────────────────────────────────────────
+let processes = [];   // filled by API or simulation below
+
+const PROC_TEMPLATES = [
+  { name: 'chrome',             type: 'Browser',  baseCpu: 12, baseMem: 320*1024*1024 },
+  { name: 'node',               type: 'Runtime',  baseCpu: 8,  baseMem: 180*1024*1024 },
+  { name: 'systemd',            type: 'System',   baseCpu: 0.2,baseMem: 8*1024*1024 },
+  { name: 'Xorg',               type: 'Display',  baseCpu: 3,  baseMem: 60*1024*1024 },
+  { name: 'gnome-shell',        type: 'Desktop',  baseCpu: 4,  baseMem: 120*1024*1024 },
+  { name: 'dockerd',            type: 'Service',  baseCpu: 1,  baseMem: 90*1024*1024 },
+  { name: 'postgres',           type: 'Database', baseCpu: 2,  baseMem: 200*1024*1024 },
+  { name: 'redis-server',       type: 'Database', baseCpu: 0.5,baseMem: 30*1024*1024 },
+  { name: 'nginx',              type: 'Server',   baseCpu: 0.8,baseMem: 12*1024*1024 },
+  { name: 'webpack-dev-server', type: 'Dev',      baseCpu: 18, baseMem: 450*1024*1024 },
+  { name: 'vscode',             type: 'Editor',   baseCpu: 6,  baseMem: 380*1024*1024 },
+  { name: 'ssh',                type: 'Network',  baseCpu: 0.1,baseMem: 4*1024*1024 },
+  { name: 'cron',               type: 'System',   baseCpu: 0.05,baseMem:2*1024*1024 },
+  { name: 'pulseaudio',         type: 'Audio',    baseCpu: 1,  baseMem: 20*1024*1024 },
+  { name: 'NetworkManager',     type: 'System',   baseCpu: 0.3,baseMem: 14*1024*1024 },
+  { name: 'containerd',         type: 'Service',  baseCpu: 1.5,baseMem: 70*1024*1024 },
+  { name: 'rsyslogd',           type: 'System',   baseCpu: 0.1,baseMem: 5*1024*1024 },
+  { name: 'kworker',            type: 'Kernel',   baseCpu: 0.5,baseMem: 0 },
+  { name: 'irqbalance',         type: 'Kernel',   baseCpu: 0.1,baseMem: 2*1024*1024 },
+  { name: 'python3',            type: 'Runtime',  baseCpu: 5,  baseMem: 110*1024*1024 },
+];
+let simProcesses = PROC_TEMPLATES.map((t, i) => ({
+  ...t, pid: 1000 + i * 37 + Math.floor(Math.random()*20),
+  status: t.baseCpu > 5 ? 'Running' : t.baseCpu < 0.5 ? 'Idle' : 'Sleeping',
+  cpu: t.baseCpu, mem: t.baseMem,
+}));
+
+function jitter(v, f=0.15) { return Math.max(0, v * (1 + (Math.random()-0.5)*f)); }
+function updateSimProcesses() {
+  simProcesses = simProcesses.map(p => ({
+    ...p,
+    cpu: jitter(p.baseCpu, 0.4),
+    mem: jitter(p.baseMem, 0.05),
+    status: p.baseCpu > 5 ? 'Running' : p.baseCpu < 0.5 ? 'Idle' : 'Sleeping',
+  }));
+}
+
+// ─────────────────────────────────────────────────
+// Canvas sparkline drawing
+// ─────────────────────────────────────────────────
+function drawSparkline(canvas, data, color, fillColor, maxVal) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0) return;
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const max = maxVal || Math.max(...data, 1);
+  ctx.clearRect(0, 0, W, H);
+
+  // grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  [0.25,0.5,0.75].forEach(f => {
+    ctx.beginPath(); ctx.moveTo(0, H*f); ctx.lineTo(W, H*f); ctx.stroke();
+  });
+
+  const pts = data.map((v,i) => [i/(data.length-1)*W, H - (v/max)*H*0.9 - H*0.05]);
+
+  // fill gradient
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, fillColor + '55');
+  grad.addColorStop(1, fillColor + '00');
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  pts.forEach(([x,y]) => ctx.lineTo(x, y));
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  pts.forEach(([x,y],i) => i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+// ─────────────────────────────────────────────────
+// Big chart (performance detail)
+// ─────────────────────────────────────────────────
+function drawBigChart(canvas, data, color, fillColor, maxVal, label) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth * dpr;
+  canvas.height = 200 * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = 200;
+  const max = maxVal || Math.max(...data, 1);
+  ctx.clearRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for (let i=0;i<=4;i++) {
+    const y = H - (i/4)*H*0.85 - H*0.05;
+    ctx.beginPath(); ctx.moveTo(40,y); ctx.lineTo(W,y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px system-ui';
+    ctx.fillText(((max*i/4)|0)+'', 2, y+4);
+  }
+  // time labels
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '10px system-ui';
+  ctx.fillText('60s', 42, H-2);
+  ctx.fillText('0s', W-20, H-2);
+
+  const pts = data.map((v,i) => [40 + (i/(data.length-1))*(W-44), H - 10 - (v/max)*(H-20)]);
+
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, fillColor+'66'); grad.addColorStop(1, fillColor+'00');
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], H-10);
+  pts.forEach(([x,y]) => ctx.lineTo(x,y));
+  ctx.lineTo(pts[pts.length-1][0], H-10);
+  ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach(([x,y],i)=>i===0?ctx.moveTo(x,y):ctx.lineTo(x,y));
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+// ─────────────────────────────────────────────────
+// Tabs
+// ─────────────────────────────────────────────────
+let activeTab = 'overview';
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    activeTab = btn.dataset.tab;
+    $('tab-' + activeTab).classList.add('active');
+    // Trigger immediate render when switching to a data tab
+    if (activeTab === 'performance') requestAnimationFrame(renderPerfDetail);
+    if (activeTab === 'processes')   renderProcesses();
+  });
+});
+
+// ─────────────────────────────────────────────────
+// Performance sidebar nav
+// ─────────────────────────────────────────────────
+let activePerfMetric = 'cpu';
+document.querySelectorAll('.perf-nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.perf-nav-item').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    activePerfMetric = item.dataset.metric;
+    renderPerfDetail();
+  });
+});
+
+// ─────────────────────────────────────────────────
+// Render helpers
+// ─────────────────────────────────────────────────
+const COLOR_MAP = {
+  cpu:  ['var(--accent-cpu)',  '#1f6feb'],
+  mem:  ['var(--accent-mem)',  '#238636'],
+  disk: ['var(--accent-disk)', '#da3633'],
+  net:  ['var(--accent-net)',  '#8250df'],
+  gpu:  ['var(--accent-gpu)',  '#bf8700'],
+};
+
+function renderPerfDetail() {
+  const m = activePerfMetric;
+  const [color, fill] = COLOR_MAP[m];
+  const titles = { cpu:'CPU', mem:'Memory', net:'Network', disk:'Disk', gpu:'GPU' };
+  $('pd-title').textContent = titles[m];
+
+  let ring, maxVal, statsHtml;
+  if (m==='cpu') {
+    ring = state.cpu.ring; maxVal = 100;
+    statsHtml = `
+      <div class="perf-stat"><div class="ps-label">Utilisation</div><div class="ps-value color-cpu">${fmt(state.cpu.pct)}%</div></div>
+      <div class="perf-stat"><div class="ps-label">Logical CPUs</div><div class="ps-value">${navigator.hardwareConcurrency||'—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">Platform</div><div class="ps-value" style="font-size:12px">${navigator.platform||'—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">User agent</div><div class="ps-value" style="font-size:10px;line-height:1.4">${(navigator.userAgent||'').split(' ').slice(0,3).join(' ')}</div></div>
+    `;
+  } else if (m==='mem') {
+    ring = state.heap.ring; maxVal = state.heap.limitBytes;
+    statsHtml = `
+      <div class="perf-stat"><div class="ps-label">JS Heap Used</div><div class="ps-value color-mem">${fmtBytes(state.heap.usedBytes)}</div></div>
+      <div class="perf-stat"><div class="ps-label">JS Heap Total</div><div class="ps-value">${fmtBytes(state.heap.totalBytes)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Heap Limit</div><div class="ps-value">${fmtBytes(state.heap.limitBytes)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Device RAM</div><div class="ps-value">${navigator.deviceMemory ? navigator.deviceMemory+' GB' : '—'}</div></div>
+    `;
+  } else if (m==='net') {
+    ring = state.net.ring; maxVal = null;
+    statsHtml = `
+      <div class="perf-stat"><div class="ps-label">Download</div><div class="ps-value color-net">${fmtBytes(state.net.dlBps,true)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Upload</div><div class="ps-value">${fmtBytes(state.net.ulBps,true)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Total</div><div class="ps-value">${fmtBytes(state.net.totalBytes)}</div></div>
+    `;
+  } else if (m==='disk') {
+    ring = state.disk.ring; maxVal = null;
+    statsHtml = `
+      <div class="perf-stat"><div class="ps-label">Read</div><div class="ps-value color-disk">${fmtBytes(state.disk.readBps,true)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Write</div><div class="ps-value">${fmtBytes(state.disk.writeBps,true)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Active %</div><div class="ps-value">${fmt(state.disk.pct)}%</div></div>
+    `;
+  } else {
+    ring = state.gpu.ring; maxVal = 100;
+    const gi = getGPUInfo();
+    statsHtml = `
+      <div class="perf-stat"><div class="ps-label">GPU Load (est.)</div><div class="ps-value color-gpu">${fmt(state.gpu.pct)}%</div></div>
+      <div class="perf-stat"><div class="ps-label">Renderer</div><div class="ps-value" style="font-size:10px;line-height:1.4">${gi.renderer}</div></div>
+      <div class="perf-stat"><div class="ps-label">Vendor</div><div class="ps-value" style="font-size:10px;line-height:1.4">${gi.vendor}</div></div>
+    `;
+  }
+  drawBigChart($('pd-canvas'), ring, color, fill, maxVal);
+  $('pd-stats').innerHTML = statsHtml;
+}
+
+// ─────────────────────────────────────────────────
+// Render processes table
+// ─────────────────────────────────────────────────
+function renderProcesses() {
+  const filter = $('proc-search').value.toLowerCase();
+  const sortKey = $('proc-sort').value;
+  let procs = processes.filter(p => !filter || p.name.toLowerCase().includes(filter));
+  procs.sort((a,b) => sortKey==='name' ? a.name.localeCompare(b.name) : sortKey==='pid' ? a.pid-b.pid : b[sortKey==='cpu'?'cpu':'mem'] - a[sortKey==='cpu'?'cpu':'mem']);
+  const maxMem = Math.max(...procs.map(p=>p.mem), 1);
+  const maxCpu = Math.max(...procs.map(p=>p.cpu), 1);
+
+  const badge = s => {
+    const cls = s==='Running'?'badge-running':s==='Idle'?'badge-idle':'badge-sleeping';
+    return `<span class="badge ${cls}">${s}</span>`;
+  };
+
+  $('proc-tbody').innerHTML = procs.map(p=>`
+    <tr>
+      <td class="td-name">${p.name}</td>
+      <td class="td-pid">${p.pid}</td>
+      <td>${badge(p.status)}</td>
+      <td class="td-num">${fmt(p.cpu, 1)}%</td>
+      <td class="td-bar"><div class="mini-bar"><div class="mini-fill fill-cpu" style="width:${(p.cpu/maxCpu*100).toFixed(1)}%"></div></div></td>
+      <td class="td-num">${fmtBytes(p.mem)}</td>
+      <td class="td-bar"><div class="mini-bar"><div class="mini-fill fill-mem" style="width:${(p.mem/maxMem*100).toFixed(1)}%"></div></div></td>
+      <td class="td-pid">${p.type}</td>
+    </tr>`).join('');
+}
+
+$('proc-search').addEventListener('input', renderProcesses);
+$('proc-sort').addEventListener('change', renderProcesses);
+
+// ─────────────────────────────────────────────────
+// Clock
+// ─────────────────────────────────────────────────
+function updateClock() {
+  $('clock').textContent = new Date().toLocaleTimeString();
+}
+
+// ─────────────────────────────────────────────────
+// Init static info (browser-only defaults, overridden by API)
+// ─────────────────────────────────────────────────
+function initStaticInfo() {
+  const cores = navigator.hardwareConcurrency || '—';
+  $('cpu-cores').textContent       = cores;
+  $('cpu-threads').textContent     = cores;
+  $('cpu-arch').textContent        = navigator.platform || '—';
+  $('cpu-cores-label').textContent = cores + ' cores';
+  const ramBytes = navigator.deviceMemory ? navigator.deviceMemory * 1024 ** 3 : null;
+  $('mem-total').textContent = ramBytes ? fmtBytes(ramBytes) : '—';
+  const gi = getGPUInfo();
+  $('gpu-renderer').textContent = gi.renderer;
+  $('gpu-vendor').textContent   = gi.vendor;
+  $('gpu-name').textContent     = gi.renderer.split('/')[0].trim().substring(0, 40);
+  $('gpu-vram').textContent     = '—';
+}
+
+// ─────────────────────────────────────────────────
+// Main update loop  (async — awaits one API call per tick)
+// ─────────────────────────────────────────────────
+let tick = 0;
+
+async function update() {
+  tick++;
+  updateClock();
+
+  // ── Fetch real data (if server is up) ─────────
+  liveData = await fetchStats();  // null when server unavailable
+
+  // ── JS Heap (always real) ─────────────────────
+  const heap = sampleHeap();
+  state.heap.usedBytes  = heap.used;
+  state.heap.totalBytes = heap.total;
+  state.heap.limitBytes = heap.limit;
+  state.heap.pct        = heap.pct;
+  pushRing(state.heap.ring, heap.used);
+
+  // ── CPU ───────────────────────────────────────
+  const cpuPct = liveData ? liveData.cpu.loadPercent : 0;
+  state.cpu.pct = cpuPct;
+  pushRing(state.cpu.ring, cpuPct);
+
+  // ── Memory ────────────────────────────────────
+  const ramUsed  = liveData ? liveData.memory.usedBytes  : 0;
+  const ramTotal = liveData ? liveData.memory.totalBytes : (navigator.deviceMemory || 4) * 1024 ** 3;
+  const ramPct   = liveData ? liveData.memory.usedPercent : 0;
+  const ramAvail = liveData ? liveData.memory.availBytes  : 0;
+  state.mem.usedBytes  = ramUsed;
+  state.mem.totalBytes = ramTotal;
+  state.mem.pct        = ramPct;
+  pushRing(state.mem.ring, ramPct);
+
+  // ── Disk ──────────────────────────────────────
+  const diskRead  = liveData ? liveData.disk.readBps  : 0;
+  const diskWrite = liveData ? liveData.disk.writeBps : 0;
+  const diskTot   = diskRead + diskWrite;
+  state.disk.readBps  = diskRead;
+  state.disk.writeBps = diskWrite;
+  state.disk.pct = Math.min(100, diskTot / (500 * 1024 * 1024) * 100);
+  pushRing(state.disk.ring, diskTot);
+
+  // ── Network ───────────────────────────────────
+  // API gives real rx/tx rates; also update the resource-timing panel
+  const browserNet = sampleBrowserNetwork();  // always run for the resource-stats panel
+  const dlBps  = liveData ? liveData.net.rxBps  : browserNet.dlBps;
+  const ulBps  = liveData ? liveData.net.txBps  : browserNet.ulBps;
+  const netTx  = liveData ? liveData.net.txTotal : browserNet.totalBytes;
+  const netRx  = liveData ? liveData.net.rxTotal : 0;
+  const netTotal = dlBps + ulBps;
+  if (liveData) {
+    const ifaces = (liveData.net.ifaces || []).filter(i => i !== 'lo').join(', ') || 'eth0';
+    $('net-iface').textContent = ifaces;
+    $('net-total').textContent = fmtBytes(netRx + netTx);
+  }
+  state.net.dlBps = dlBps;
+  state.net.ulBps = ulBps;
+  state.net.pct   = Math.min(100, netTotal / (100 * 1024 * 1024 / 8) * 100);
+  pushRing(state.net.ring,   netTotal);
+  pushRing(state.net.dlRing, dlBps);
+  pushRing(state.net.ulRing, ulBps);
+
+  // ── GPU (systeminformation doesn't expose live load on all platforms) ──
+  // Keep as 0 / display '—' when real data unavailable
+  state.gpu.pct = 0;
+  pushRing(state.gpu.ring, 0);
+
+  // ── Processes ─────────────────────────────────
+  if (liveData && liveData.processes.length) {
+    processes = liveData.processes.map(p => ({
+      name:   p.name,
+      pid:    p.pid,
+      status: p.status === 'running' ? 'Running' : p.status === 'sleeping' ? 'Sleeping' : 'Idle',
+      cpu:    p.cpu,
+      mem:    p.memBytes,
+      type:   p.user || '—',
+    }));
+  } else {
+    updateSimProcesses();
+    processes = simProcesses.map(p => ({ name: p.name, pid: p.pid, status: p.status, cpu: p.cpu, mem: p.mem, type: p.type }));
+  }
+
+  // ── Update DOM ────────────────────────────────
+  // Header
+  $('hdr-cpu').textContent  = liveData ? fmt(cpuPct) + '%' : '—';
+  $('hdr-mem').textContent  = liveData ? fmt(ramPct)  + '%' : '—';
+  $('hdr-disk').textContent = fmtBytes(diskTot, true);
+  $('hdr-net').textContent  = fmtBytes(dlBps, true);
+
+  // CPU card
+  $('ov-cpu').textContent        = liveData ? fmt(cpuPct) + '%' : '—';
+  $('gauge-cpu').style.width     = cpuPct + '%';
+  $('gp-cpu').textContent        = fmt(cpuPct) + '%';
+
+  // Memory card
+  $('ov-mem').textContent        = fmtBytes(ramUsed);
+  $('gauge-mem').style.width     = ramPct + '%';
+  $('gp-mem').textContent        = fmt(ramPct) + '%';
+  $('mem-sub').textContent       = `${fmt(ramPct)}% of ${fmtBytes(ramTotal)} used`;
+  $('mem-used').textContent      = fmtBytes(ramUsed);
+  $('mem-avail').textContent     = fmtBytes(ramAvail);
+  if (liveData) {
+    $('mem-total').textContent   = fmtBytes(ramTotal);
+    const sw = liveData.memory;
+    if (sw.swapTotal) {
+      $('cpu-threads').textContent = fmtBytes(sw.swapUsed) + ' / ' + fmtBytes(sw.swapTotal) + ' swap';
+    }
+  }
+
+  // Disk card
+  $('ov-disk').textContent       = fmtBytes(diskTot, true);
+  $('gauge-disk').style.width    = state.disk.pct + '%';
+  $('gp-disk').textContent       = fmt(state.disk.pct) + '%';
+  $('disk-read').textContent     = fmtBytes(diskRead, true);
+  $('disk-write').textContent    = fmtBytes(diskWrite, true);
+  $('disk-active').textContent   = fmt(state.disk.pct) + '%';
+
+  // Network card
+  $('ov-net').textContent        = fmtBytes(netTotal, true);
+  $('gauge-net').style.width     = state.net.pct + '%';
+  $('gp-net').textContent        = fmt(state.net.pct) + '%';
+  $('net-dl').textContent        = fmtBytes(dlBps, true);
+  $('net-ul').textContent        = fmtBytes(ulBps, true);
+  // Network tab big
+  $('net-dl-big').textContent    = fmtBytes(dlBps, true);
+  $('net-ul-big').textContent    = fmtBytes(ulBps, true);
+  $('net-detail-label').textContent = 'Download: ' + fmtBytes(dlBps, true) + '  Upload: ' + fmtBytes(ulBps, true);
+
+  // GPU card
+  $('ov-gpu').textContent        = liveData ? '—' : '—';
+  $('gauge-gpu').style.width     = '0%';
+  $('gp-gpu').textContent        = '—';
+
+  // JS Heap card
+  $('ov-heap').textContent       = fmtBytes(heap.used);
+  $('gauge-heap').style.width    = heap.pct + '%';
+  $('gp-heap').textContent       = fmt(heap.pct) + '%';
+  $('heap-used').textContent     = fmtBytes(heap.used);
+  $('heap-total').textContent    = fmtBytes(heap.total);
+  $('heap-limit').textContent    = fmtBytes(heap.limit);
+
+  // Performance sidebar
+  $('pni-cpu').textContent       = liveData ? fmt(cpuPct) + '%' : '—';
+  $('pni-mem').textContent       = fmtBytes(ramUsed);
+  $('pni-net').textContent       = fmtBytes(netTotal, true);
+  $('pni-disk').textContent      = fmtBytes(diskTot, true);
+  $('pni-gpu').textContent       = '—';
+
+  // Footer
+  $('ft-procs').textContent      = processes.length;
+  $('ft-threads').textContent    = liveData ? (liveData.processes.length || processes.length) : processes.length;
+  $('ft-uptime').textContent     = fmtUptime(Math.floor(performance.now() / 1000));
+  $('ft-heap').textContent       = fmtBytes(heap.used);
+
+  // ── Sparklines ────────────────────────────────
+  drawSparkline($('spark-cpu'),  state.cpu.ring,  'var(--accent-cpu)',  '#1f6feb', 100);
+  drawSparkline($('spark-mem'),  state.mem.ring,  'var(--accent-mem)',  '#238636', 100);
+  drawSparkline($('spark-disk'), state.disk.ring, 'var(--accent-disk)', '#da3633', null);
+  drawSparkline($('spark-net'),  state.net.ring,  'var(--accent-net)',  '#8250df', null);
+  drawSparkline($('spark-gpu'),  state.gpu.ring,  'var(--accent-gpu)',  '#bf8700', 100);
+  drawSparkline($('spark-heap'), state.heap.ring, 'var(--accent-net)',  '#8250df', null);
+
+  drawSparkline($('pnc-cpu'),  state.cpu.ring,  'var(--accent-cpu)',  '#1f6feb', 100);
+  drawSparkline($('pnc-mem'),  state.mem.ring,  'var(--accent-mem)',  '#238636', 100);
+  drawSparkline($('pnc-net'),  state.net.ring,  'var(--accent-net)',  '#8250df', null);
+  drawSparkline($('pnc-disk'), state.disk.ring, 'var(--accent-disk)', '#da3633', null);
+  drawSparkline($('pnc-gpu'),  state.gpu.ring,  'var(--accent-gpu)',  '#bf8700', 100);
+
+  if (activeTab === 'performance') renderPerfDetail();
+
+  drawSparkline($('net-big-canvas'), state.net.ring,   'var(--accent-net)', '#8250df', null);
+  drawSparkline($('net-dl-spark'),   state.net.dlRing, 'var(--accent-net)', '#8250df', null);
+  drawSparkline($('net-ul-spark'),   state.net.ulRing, 'var(--accent-mem)', '#238636', null);
+
+  if (activeTab === 'processes') renderProcesses();
+}
+
+// ─────────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────────
+initStaticInfo();
+renderProcesses();
+probeAPI().then(() => update());
+setInterval(update, 1000);
+</script>
+</body>
+</html>

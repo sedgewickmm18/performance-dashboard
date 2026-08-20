@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Bob + Chrome DevTools MCP — System Dashboard Case Study">
+    <title>Bob + Chrome DevTools MCP</title>
+
+    <!-- Reveal.js CSS from CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/theme/white.css" id="theme">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/highlight/monokai.css">
+
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #059669;
+            --accent-color: #d97706;
+            --text-color: #1f2937;
+            --text-light: #6b7280;
+            --bg-light: #ffffff;
+            --bg-lighter: #f9fafb;
+            --code-bg: #f3f4f6;
+            --border-color: #e5e7eb;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            /* dashboard palette (for accent boxes) */
+            --dash-bg: #0e1117;
+            --dash-surface: #161b22;
+            --dash-blue: #58a6ff;
+            --dash-green: #3fb950;
+            --dash-red: #f78166;
+            --dash-purple: #d2a8ff;
+        }
+
+        .reveal {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 22px;
+            color: var(--text-color);
+        }
+
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: normal;
+            color: var(--text-color);
+        }
+        .reveal h1 { font-size: 1.8em; color: var(--primary-color); margin: 0.1em 0 0.3em; }
+        .reveal h2 { font-size: 1.35em; color: var(--secondary-color); margin: 0.1em 0 0.4em; }
+        .reveal h3 { font-size: 1.05em; color: var(--accent-color); margin: 0.1em 0 0.3em; }
+        .reveal h4 { font-size: 0.95em; color: var(--text-color); font-weight: 600; margin: 0.1em 0 0.2em; }
+
+        .reveal ul, .reveal ol { text-align: left; margin: 0 0 0.5em 1.4em; line-height: 1.4; }
+        .reveal ul li, .reveal ol li { margin-bottom: 0.3em; line-height: 1.35; }
+
+        .reveal code {
+            font-family: 'Fira Code', 'Courier New', monospace;
+            padding: 0.1em 0.3em;
+            background-color: var(--code-bg);
+            border-radius: 3px;
+            font-size: 0.78em;
+            color: var(--text-color);
+        }
+        .reveal pre {
+            width: 100%; margin: 0.5em auto;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            border-radius: 6px;
+            background-color: #1e1e2e;
+            border: 1px solid var(--border-color);
+        }
+        .reveal pre code {
+            padding: 0.7em; max-height: 400px; overflow: auto;
+            font-size: 0.58em; line-height: 1.35;
+        }
+
+        /* Grids */
+        .reveal .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.8rem; }
+        .reveal .grid-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem; margin-top: 0.8rem; }
+        .reveal .grid-4col { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.7rem; margin-top: 0.8rem; }
+
+        /* Cards */
+        .reveal .card {
+            background: var(--bg-lighter);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.9em;
+            box-shadow: 0 2px 6px var(--shadow-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .reveal .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px var(--shadow-color); }
+        .reveal .card.accent-blue  { border-left: 4px solid var(--primary-color); }
+        .reveal .card.accent-green { border-left: 4px solid var(--secondary-color); }
+        .reveal .card.accent-amber { border-left: 4px solid var(--accent-color); }
+        .reveal .card.ds-highlight {
+            border-left: 4px solid var(--secondary-color);
+            background: linear-gradient(to right, rgba(5,150,105,0.05), var(--bg-lighter));
+        }
+
+        /* Stat box */
+        .reveal .stat-box {
+            background: var(--bg-lighter);
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            padding: 1.2em;
+            text-align: center;
+        }
+        .reveal .stat-number { font-size: 2.2em; color: var(--primary-color); font-weight: 700; }
+
+        /* Badge */
+        .reveal .badge {
+            display: inline-block;
+            background: var(--secondary-color);
+            color: #fff;
+            font-size: 0.52em; font-weight: 700;
+            padding: 0.15em 0.5em;
+            border-radius: 4px;
+            vertical-align: middle;
+            margin-left: 0.4em;
+        }
+        .reveal .badge-blue  { background: var(--primary-color); }
+        .reveal .badge-amber { background: var(--accent-color); }
+        .reveal .badge-dark  { background: #374151; }
+
+        /* Mermaid container */
+        .reveal .mermaid-container {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            border-radius: 6px; padding: 8px;
+        }
+        .reveal .mermaid-container:hover { transform: scale(1.015); }
+
+        /* Tool step list */
+        .tool-step {
+            display: flex; align-items: flex-start; gap: 0.7em;
+            margin-bottom: 0.55em;
+        }
+        .tool-step .step-icon {
+            font-size: 1.1em; flex-shrink: 0; margin-top: 0.05em;
+        }
+        .tool-step .step-text { font-size: 0.78em; color: var(--text-color); line-height: 1.4; }
+        .tool-step .step-text code { font-size: 0.85em; }
+        .tool-step .step-label {
+            font-size: 0.6em; font-weight: 700;
+            letter-spacing: 0.05em; text-transform: uppercase;
+            color: var(--primary-color); display: block; margin-bottom: 0.15em;
+        }
+
+        /* Dark code card (mimics the dashboard style) */
+        .dash-card {
+            background: var(--dash-surface);
+            border: 1px solid #2a3441;
+            border-radius: 6px;
+            padding: 0.8em 1em;
+            color: #e6edf3;
+            font-size: 0.72em;
+        }
+        .dash-card .dc-label {
+            font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.06em;
+            color: #7d8590; margin-bottom: 0.3em;
+        }
+        .dash-card .dc-val { font-size: 1.5em; font-weight: 700; }
+        .dash-card .dc-val.blue   { color: var(--dash-blue); }
+        .dash-card .dc-val.green  { color: var(--dash-green); }
+        .dash-card .dc-val.red    { color: var(--dash-red); }
+        .dash-card .dc-val.purple { color: var(--dash-purple); }
+
+        /* Screenshot */
+        .reveal .screenshot {
+            width: 100%; border-radius: 6px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            border: 1px solid var(--border-color);
+            cursor: zoom-in;
+        }
+
+        /* Timeline row */
+        .timeline {
+            display: flex; align-items: stretch; gap: 0;
+            margin: 0.8em 0;
+        }
+        .tl-item {
+            flex: 1; text-align: center; position: relative;
+            padding: 0.6em 0.4em 0.4em;
+        }
+        .tl-item::before {
+            content: '';
+            position: absolute; top: 50%; left: 0; right: 0;
+            height: 2px; background: var(--border-color); z-index: 0;
+        }
+        .tl-item:first-child::before { left: 50%; }
+        .tl-item:last-child::before  { right: 50%; }
+        .tl-dot {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--primary-color); color: #fff;
+            font-size: 0.65em; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 0.35em; position: relative; z-index: 1;
+        }
+        .tl-dot.green  { background: var(--secondary-color); }
+        .tl-dot.amber  { background: var(--accent-color); }
+        .tl-dot.purple { background: #7c3aed; }
+        .tl-dot.red    { background: #dc2626; }
+        .tl-label { font-size: 0.62em; color: var(--text-light); line-height: 1.3; }
+        .tl-label strong { display: block; color: var(--text-color); font-size: 1.05em; }
+
+        /* Image Modal */
+        .image-modal { display: none; position: fixed; z-index: 9999; inset: 0;
+            background: rgba(0,0,0,0.93); cursor: zoom-out; }
+        .image-modal.active { display: flex; align-items: center; justify-content: center; }
+        .image-modal img { max-width: 95%; max-height: 93%; border-radius: 6px;
+            box-shadow: 0 0 40px rgba(255,255,255,0.15); }
+        .image-modal-close {
+            position: absolute; top: 18px; right: 28px;
+            color: #fff; font-size: 36px; cursor: pointer;
+            background: rgba(0,0,0,0.5); width: 48px; height: 48px;
+            border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; line-height: 1; z-index: 10000;
+        }
+
+        .reveal blockquote {
+            width: 90%; margin: 0.4em auto;
+            padding: 0.5em 1em;
+            background: var(--bg-lighter);
+            border-left: 4px solid var(--primary-color);
+            box-shadow: 0 2px 8px var(--shadow-color);
+            font-style: italic; color: var(--text-light);
+        }
+
+        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn  { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 1 – Title
+         ══════════════════════════════════════════════════════ -->
+    <section id="title">
+      <h1>Bob + Chrome DevTools MCP</h1>
+      <p style="color:var(--text-light);font-size:0.8em;margin-bottom:1.2em;">
+        Building a live System Dashboard in &lt; 1 hour with an AI agent and a browser feedback loop
+      </p>
+      <div class="grid-3col" style="max-width:700px;margin:0 auto;">
+        <div class="stat-box">
+          <div class="stat-number">&lt;&nbsp;1h</div>
+          <div style="font-size:0.7em;color:var(--text-light)">Wall-clock time</div>
+        </div>
+        <div class="stat-box" style="border-color:var(--secondary-color)">
+          <div class="stat-number" style="color:var(--secondary-color)">4</div>
+          <div style="font-size:0.7em;color:var(--text-light)">Live tabs built</div>
+        </div>
+        <div class="stat-box" style="border-color:var(--accent-color)">
+          <div class="stat-number" style="color:var(--accent-color)">0</div>
+          <div style="font-size:0.7em;color:var(--text-light)">Console errors</div>
+        </div>
+      </div>
+      <p style="font-size:0.6em;color:var(--text-light);margin-top:1.4em;text-align:center;">
+        Press → to advance &nbsp;|&nbsp; Press F for fullscreen &nbsp;|&nbsp; Click screenshots to zoom
+      </p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 2 – What is Bob?
+         ══════════════════════════════════════════════════════ -->
+    <section id="bob-intro">
+      <h2>What is Bob?</h2>
+      <p style="font-size:0.75em;color:var(--text-light);margin-bottom:0.8em;">
+        An AI coding agent built on a Claude foundation model with a rich, composable tool ecosystem
+      </p>
+
+      <div class="grid-2col" style="align-items:start;">
+        <div>
+          <div class="card accent-blue" style="margin-bottom:0.7em;">
+            <h4>🤖 Agent core</h4>
+            <p style="font-size:0.72em;margin:0;color:var(--text-light);">
+              Anthropic Claude model running inside the Bob framework.
+              Receives a system prompt defining its role, skills, and tool palette.
+              Reasons step-by-step and selects the right tool for each action.
+            </p>
+          </div>
+          <div class="card accent-green" style="margin-bottom:0.7em;">
+            <h4>🛠️ Built-in tools</h4>
+            <p style="font-size:0.72em;margin:0;color:var(--text-light);">
+              File I/O (<code>read_file</code>, <code>write_file</code>, <code>apply_diff</code>),
+              code search (<code>grep</code>, <code>glob</code>, <code>FindSymbol</code>),
+              shell execution (<code>execute_command</code>), todo tracking, and more.
+            </p>
+          </div>
+          <div class="card accent-amber">
+            <h4>📦 MCP server plug-ins</h4>
+            <p style="font-size:0.72em;margin:0;color:var(--text-light);">
+              Any MCP (Model Context Protocol) server can be wired in, extending the
+              agent's reach to databases, APIs, browsers, and external services.
+            </p>
+          </div>
+        </div>
+
+        <div class="mermaid-container" id="diag-bob">
+          <div class="mermaid">
+graph TD
+    U["👤 User prompt"] --> B["🤖 Bob agent\n(Claude)"]
+    B --> T1["📁 File tools\nread / write / diff"]
+    B --> T2["🔍 Search tools\ngrep / glob / FindSymbol"]
+    B --> T3["⚙️ Shell\nexecute_command"]
+    B --> MCP["🔌 MCP servers"]
+    MCP --> CDT["🌐 Chrome DevTools MCP\ntake_screenshot · take_snapshot\nlist_console_messages · evaluate_script\nnavigate_page · click · fill"]
+    MCP --> OT["… other MCPs"]
+
+    style B fill:#dbeafe,stroke:#2563eb
+    style MCP fill:#d1fae5,stroke:#059669
+    style CDT fill:#fef3c7,stroke:#d97706
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 3 – Chrome DevTools MCP
+         ══════════════════════════════════════════════════════ -->
+    <section id="chrome-mcp">
+      <h2>Chrome DevTools MCP</h2>
+      <p style="font-size:0.75em;color:var(--text-light);margin-bottom:0.8em;">
+        Gives the AI agent direct, programmatic access to a live browser — replacing guesswork with observation
+      </p>
+
+      <div class="grid-2col">
+        <div>
+          <h3>Key capabilities</h3>
+          <div class="tool-step">
+            <span class="step-icon">📸</span>
+            <div class="step-text">
+              <span class="step-label">Visual verification</span>
+              <code>take_screenshot</code> — see exactly what rendered
+            </div>
+          </div>
+          <div class="tool-step">
+            <span class="step-icon">🌳</span>
+            <div class="step-text">
+              <span class="step-label">Accessibility tree</span>
+              <code>take_snapshot</code> — structured DOM as text, with <code>uid</code>s to click
+            </div>
+          </div>
+          <div class="tool-step">
+            <span class="step-icon">🖱️</span>
+            <div class="step-text">
+              <span class="step-label">Interaction</span>
+              <code>click</code>, <code>fill</code>, <code>press_key</code> — drive the UI like a user
+            </div>
+          </div>
+          <div class="tool-step">
+            <span class="step-icon">🖥️</span>
+            <div class="step-text">
+              <span class="step-label">Console</span>
+              <code>list_console_messages</code> — catch runtime errors immediately
+            </div>
+          </div>
+          <div class="tool-step">
+            <span class="step-icon">⚡</span>
+            <div class="step-text">
+              <span class="step-label">Script execution</span>
+              <code>evaluate_script</code> — introspect React state, run JS, wait for async ops
+            </div>
+          </div>
+          <div class="tool-step">
+            <span class="step-icon">🌐</span>
+            <div class="step-text">
+              <span class="step-label">Navigation</span>
+              <code>navigate_page</code>, <code>new_page</code> — open, reload, and switch pages
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3>Why this changes everything</h3>
+          <div class="card ds-highlight" style="margin-bottom:0.6em;">
+            <p style="font-size:0.72em;margin:0;color:var(--text-color);">
+              <strong>Before MCP:</strong> Write code → run build → open browser manually →
+              describe what you see → agent guesses at the fix → repeat.
+              Many turns, no ground truth.
+            </p>
+          </div>
+          <div class="card" style="border-left:4px solid var(--secondary-color);">
+            <p style="font-size:0.72em;margin:0;color:var(--text-color);">
+              <strong>With Chrome DevTools MCP:</strong> Agent writes code, opens the page itself,
+              takes a screenshot, reads the console, clicks every tab, verifies — all
+              in the same turn. Ground truth, zero manual steps.
+            </p>
+          </div>
+          <blockquote style="margin-top:0.8em;font-size:0.7em;">
+            "The browser is the test suite."
+          </blockquote>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 4 – The Task
+         ══════════════════════════════════════════════════════ -->
+    <section id="the-task">
+      <h2>The Task</h2>
+      <p style="font-size:0.75em;color:var(--text-light);margin-bottom:0.6em;">
+        User prompt → working product, verified in the browser
+      </p>
+
+      <div class="card" style="background:#f0f9ff;border-left:4px solid var(--primary-color);margin-bottom:0.8em;padding:0.7em 1em;">
+        <p style="font-size:0.78em;font-style:italic;margin:0;color:var(--text-color);">
+          "Please build a new single page dashboard to reflect system state like a windows task manager.
+          Make use of chrome-dev MCP to check the results."
+        </p>
+      </div>
+
+      <div class="grid-2col" style="align-items:start;">
+        <div>
+          <h3>Requirements extracted</h3>
+          <ul style="font-size:0.72em;">
+            <li>Single-page, self-contained — no build step</li>
+            <li>Task-Manager style — metrics with live graphs</li>
+            <li>Multiple resource types: CPU, RAM, Disk, Network, GPU, JS Heap</li>
+            <li>Tabbed navigation (Overview, Performance, Processes, Network)</li>
+            <li>Use Chrome DevTools MCP to verify the result visually</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3>Constraints noted</h3>
+          <ul style="font-size:0.72em;">
+            <li>Browser-only APIs (no Node.js, no OS syscalls)</li>
+            <li>Real data where possible, plausible simulation where not</li>
+            <li>Live update every 1 second</li>
+            <li>Dark theme matching Windows Task Manager aesthetic</li>
+            <li>Zero external dependencies beyond vanilla JS + Canvas</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="grid-4col" style="margin-top:0.6em;">
+        <div class="dash-card">
+          <div class="dc-label">CPU</div>
+          <div class="dc-val blue">~6%</div>
+          <div style="font-size:0.75em;color:#7d8590;margin-top:0.2em;">32 cores · Linux x86_64</div>
+        </div>
+        <div class="dash-card">
+          <div class="dc-label">Memory</div>
+          <div class="dc-val green">14.9 GB</div>
+          <div style="font-size:0.75em;color:#7d8590;margin-top:0.2em;">46% of 32 GB</div>
+        </div>
+        <div class="dash-card">
+          <div class="dc-label">Storage</div>
+          <div class="dc-val red">79 MB/s</div>
+          <div style="font-size:0.75em;color:#7d8590;margin-top:0.2em;">Read + Write simulated</div>
+        </div>
+        <div class="dash-card">
+          <div class="dc-label">GPU</div>
+          <div class="dc-val purple">AMD Radeon 8060S</div>
+          <div style="font-size:0.75em;color:#7d8590;margin-top:0.2em;">via WebGL debug info</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 5 – How I Approached It
+         ══════════════════════════════════════════════════════ -->
+    <section id="approach">
+      <h2>Approach — Step by Step</h2>
+
+      <div class="timeline">
+        <div class="tl-item">
+          <div class="tl-dot">1</div>
+          <div class="tl-label"><strong>Explore</strong>Take screenshot of current page; list workspace files</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot green">2</div>
+          <div class="tl-label"><strong>Plan</strong>Identify browser APIs; design state model &amp; ring buffers</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot amber">3</div>
+          <div class="tl-label"><strong>Build</strong>Write single HTML file — CSS vars, Canvas sparklines, tab system</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot purple">4</div>
+          <div class="tl-label"><strong>Open</strong><code>new_page</code> → file:// URL in live browser</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot red">5</div>
+          <div class="tl-label"><strong>Verify</strong>Screenshot + console check; click all 4 tabs; fix bugs found</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot">6</div>
+          <div class="tl-label"><strong>Done</strong>0 errors · all metrics live · sparklines animated</div>
+        </div>
+      </div>
+
+      <div class="grid-2col" style="align-items:start;margin-top:0.2em;">
+        <div>
+          <h3>Data sources used</h3>
+          <ul style="font-size:0.7em;">
+            <li><code>performance.memory</code> → real JS heap (Chrome only)</li>
+            <li><code>navigator.hardwareConcurrency</code> → 32 logical cores</li>
+            <li><code>navigator.deviceMemory</code> → 32 GB RAM</li>
+            <li><code>WEBGL_debug_renderer_info</code> → AMD Radeon 8060S GPU</li>
+            <li><code>navigator.connection</code> → 4g, 1.45 Mbps, 100 ms RTT</li>
+            <li><code>performance.getEntriesByType('resource')</code> → network stats</li>
+            <li>CPU / Disk / GPU → event-loop heuristic + simulation</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Key design decisions</h3>
+          <ul style="font-size:0.7em;">
+            <li>60-point ring buffer per metric → smooth 60 s history</li>
+            <li>Canvas 2D for sparklines (no charting lib needed)</li>
+            <li>CSS custom properties for the dark theme palette</li>
+            <li><code>requestAnimationFrame</code> ensures correct canvas size on tab switch</li>
+            <li>Processes table: 20 realistic simulated processes sorted by CPU</li>
+            <li>Performance tab mirrors Windows TM sidebar + detail pattern</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 6 – Chrome DevTools MCP in Action (Example)
+         ══════════════════════════════════════════════════════ -->
+    <section id="mcp-example">
+      <h2>Chrome DevTools MCP — A Concrete Example</h2>
+      <p style="font-size:0.72em;color:var(--text-light);margin-bottom:0.5em;">
+        The Performance tab chart was empty on first visit. Here's exactly how the MCP loop found and fixed it.
+      </p>
+
+      <div class="grid-2col" style="align-items:start;">
+        <div>
+          <div class="card accent-amber" style="margin-bottom:0.55em;">
+            <h4>🔍 Step 1 — Click the tab</h4>
+            <p style="font-size:0.7em;margin:0;color:var(--text-light);">
+              After opening the page, the agent called <code>take_snapshot</code> to get the a11y tree,
+              found the <em>Performance</em> button uid, then called <code>click(uid)</code>.
+            </p>
+          </div>
+          <div class="card accent-amber" style="margin-bottom:0.55em;">
+            <h4>📸 Step 2 — Screenshot reveals the bug</h4>
+            <p style="font-size:0.7em;margin:0;color:var(--text-light);">
+              <code>take_screenshot</code> returned an image with an empty chart panel.
+              No guessing — the agent could literally <em>see</em> the blank canvas.
+            </p>
+          </div>
+          <div class="card accent-green" style="margin-bottom:0.55em;">
+            <h4>🔎 Step 3 — Root-cause from source</h4>
+            <p style="font-size:0.7em;margin:0;color:var(--text-light);">
+              <code>grep</code> located the tab-switch handler. The chart render function
+              was only called inside the 1 s update loop — but only when the tab was
+              already active. On first switch, the canvas had zero width.
+            </p>
+          </div>
+          <div class="card accent-blue">
+            <h4>✅ Step 4 — Surgical fix + re-verify</h4>
+            <p style="font-size:0.7em;margin:0;color:var(--text-light);">
+              Added <code>requestAnimationFrame(renderPerfDetail)</code> to the tab-click handler.
+              Reloaded, clicked Performance, took another screenshot — chart appeared instantly.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <h3>The fix — 3 lines</h3>
+          <pre><code class="language-javascript">// Tab-switch handler (before)
+activeTab = btn.dataset.tab;
+$('tab-' + activeTab).classList.add('active');
+
+// Tab-switch handler (after — fix)
+activeTab = btn.dataset.tab;
+$('tab-' + activeTab).classList.add('active');
+if (activeTab === 'performance')
+  requestAnimationFrame(renderPerfDetail);
+if (activeTab === 'processes')
+  renderProcesses();</code></pre>
+
+          <div class="card" style="margin-top:0.6em;background:#f0fdf4;border-left:4px solid var(--secondary-color);">
+            <p style="font-size:0.7em;margin:0;color:var(--text-color);">
+              <strong>Total time from bug discovery to verified fix:</strong>
+              ~45 seconds — one <code>grep</code>, one <code>apply_diff</code>,
+              one <code>navigate_page(reload)</code>, one <code>click</code>,
+              one <code>take_screenshot</code>.
+            </p>
+          </div>
+
+          <div class="card" style="margin-top:0.55em;">
+            <h4>Console check — always the last step</h4>
+            <p style="font-size:0.7em;margin:0;color:var(--text-light);">
+              <code>list_console_messages</code> returned <em>no console messages</em> after every
+              reload — guaranteeing no silent runtime errors before declaring done.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 7 – Screenshot of the result
+         ══════════════════════════════════════════════════════ -->
+    <section id="screenshot">
+      <h2>The Result</h2>
+      <p style="font-size:0.72em;color:var(--text-light);margin-bottom:0.6em;">
+        Single HTML file · 520 lines · zero dependencies · live-updating every 1 s
+      </p>
+      <img
+        src="dashboard_screenshot.png"
+        alt="System Dashboard screenshot"
+        class="screenshot"
+        id="dash-screenshot"
+        style="max-height:68vh;width:auto;display:block;margin:0 auto;"
+      />
+      <p style="font-size:0.58em;color:var(--text-light);margin-top:0.5em;text-align:center;">
+        Click to zoom &nbsp;|&nbsp; Real data: 32-core CPU · 32 GB RAM · AMD Radeon 8060S · Linux x86_64
+      </p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         SLIDE 8 – Summary
+         ══════════════════════════════════════════════════════ -->
+    <section id="summary">
+      <h2>Summary</h2>
+
+      <div class="grid-3col" style="align-items:start;">
+        <div class="card ds-highlight">
+          <h3>Bob architecture</h3>
+          <ul style="font-size:0.7em;">
+            <li>Claude model + configurable role prompt</li>
+            <li>Rich native tool set (file, search, shell, todo)</li>
+            <li>Skills extend behaviour per task type</li>
+            <li>MCP protocol for external service integration</li>
+            <li>Modes optimise tool palette (Agent, Frontend Dev, Plan…)</li>
+          </ul>
+        </div>
+        <div class="card" style="border-left:4px solid #d97706;">
+          <h3>Chrome DevTools MCP</h3>
+          <ul style="font-size:0.7em;">
+            <li>Real browser = ground-truth feedback loop</li>
+            <li>Screenshot replaces manual visual QA</li>
+            <li>A11y snapshot gives clickable element IDs</li>
+            <li>Console check catches silent runtime errors</li>
+            <li>All verifications happen in the same agent turn</li>
+          </ul>
+        </div>
+        <div class="card accent-blue">
+          <h3>Impact on velocity</h3>
+          <ul style="font-size:0.7em;">
+            <li>Zero back-and-forth about "what does it look like?"</li>
+            <li>Bugs found and fixed without leaving the agent loop</li>
+            <li>Tab-chart bug: discovered → fixed → verified in ~45 s</li>
+            <li>Full dashboard (4 tabs, 6 metrics, processes table): &lt; 1 hour</li>
+            <li>0 console errors shipped</li>
+          </ul>
+        </div>
+      </div>
+
+      <blockquote style="margin-top:1em;font-size:0.75em;">
+        The Chrome DevTools MCP transforms the browser from a passive output device into
+        an active participant in the development loop — giving the agent eyes, hands, and ears.
+      </blockquote>
+
+      <p style="font-size:0.62em;color:var(--text-light);margin-top:0.8em;text-align:center;">
+        <a href="dashboard.html" target="_blank" rel="noopener">Open the live dashboard →</a>
+      </p>
+    </section>
+
+  </div><!-- /slides -->
+</div><!-- /reveal -->
+
+<!-- Image zoom modal -->
+<div id="imgModal" class="image-modal">
+  <div class="image-modal-close" id="imgModalClose">&times;</div>
+  <img id="imgModalImg" src="" alt="Zoomed screenshot" />
+</div>
+
+<!-- Reveal.js Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/highlight/highlight.js"></script>
+
+<script>
+  // Mermaid
+  mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+
+  const originalMermaid = new Map();
+  document.querySelectorAll('.mermaid-container').forEach(c => {
+    const m = c.querySelector('.mermaid');
+    if (m) originalMermaid.set(c.id, m.textContent.trim());
+  });
+
+  function renderMermaidIn(slide) {
+    slide.querySelectorAll('.mermaid').forEach(el => {
+      if (el.getAttribute('data-processed')) {
+        const c = el.closest('.mermaid-container');
+        const src = c && originalMermaid.get(c.id);
+        if (src) { el.removeAttribute('data-processed'); el.innerHTML = ''; el.textContent = src; }
+      }
+      mermaid.run({ nodes: [el] }).catch(e => console.error(e));
+    });
+  }
+
+  Reveal.initialize({
+    width: 1200, height: 700,
+    margin: 0.04, minScale: 0.2, maxScale: 2.0,
+    hash: true, transition: 'slide', transitionSpeed: 'default',
+    backgroundTransition: 'fade',
+    plugins: [RevealNotes, RevealHighlight]
+  });
+
+  Reveal.on('slidechanged', ev => {
+    requestAnimationFrame(() => setTimeout(() => renderMermaidIn(ev.currentSlide), 100));
+  });
+  requestAnimationFrame(() => {
+    setTimeout(() => renderMermaidIn(Reveal.getCurrentSlide() || document), 100);
+  });
+
+  // Image zoom
+  const modal = document.getElementById('imgModal');
+  const modalImg = document.getElementById('imgModalImg');
+
+  document.querySelectorAll('.screenshot').forEach(img => {
+    img.addEventListener('click', () => {
+      modalImg.src = img.src;
+      modal.classList.add('active');
+    });
+  });
+
+  function closeModal() { modal.classList.remove('active'); }
+  document.getElementById('imgModalClose').addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>
