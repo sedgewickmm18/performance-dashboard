@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPU Detail — System Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0e1117;
+      --surface: #161b22;
+      --surface2: #1e2733;
+      --border: #2a3441;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --accent-gpu: #ffa657;
+      --chart-gpu: #bf8700;
+      --accent-cpu: #58a6ff;
+      --accent-mem: #3fb950;
+      --green: #3fb950;
+      --radius: 8px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    header .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent-gpu);
+    }
+    header .back-link {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color .15s;
+    }
+    header .back-link:hover { color: var(--text); }
+    #clock { font-size: 13px; color: var(--muted); }
+
+    main {
+      flex: 1;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── Identity row ──────────────────────────────── */
+    .gpu-id {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .gpu-id .gi-name { font-size: 18px; font-weight: 700; color: var(--accent-gpu); }
+    .gpu-id .gi-meta { color: var(--muted); font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .gpu-id .gi-meta span b { color: var(--text); font-weight: 500; }
+
+    /* ── Metric grid ───────────────────────────────── */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+    }
+    .card-value {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--accent-gpu);
+    }
+    .card-sub { font-size: 11px; color: var(--muted); }
+
+    canvas.sparkline {
+      width: 100%;
+      height: 70px;
+      display: block;
+      border-radius: 4px;
+    }
+
+    .gauge-wrap { display: flex; align-items: center; gap: 8px; }
+    .gauge-track { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+    .gauge-fill { height: 100%; border-radius: 3px; transition: width .4s ease; background: var(--chart-gpu); }
+    .gauge-pct { font-size: 12px; color: var(--muted); min-width: 34px; text-align: right; }
+
+    /* ── Info table ────────────────────────────────── */
+    .info-table {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .info-table h3 {
+      padding: 10px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .info-row:first-of-type { border-top: none; }
+    .info-row span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
+
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 6px 20px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    footer b { color: var(--text); font-weight: 500; }
+
+    @media (max-width: 600px) {
+      .metric-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="7" width="20" height="12" rx="2"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/>
+    </svg>
+    GPU Detail
+  </div>
+  <div id="clock">—</div>
+  <a href="dashboard.html" class="back-link">← Dashboard</a>
+</header>
+
+<main>
+  <!-- Identity -->
+  <div class="gpu-id">
+    <div>
+      <div class="gi-name" id="gi-name">Detecting…</div>
+      <div class="gi-meta">
+        <span>Vendor <b id="gi-vendor">—</b></span>
+        <span>PCI Bus <b id="gi-pci">—</b></span>
+        <span>VRAM <b id="gi-vram-total">—</b></span>
+      </div>
+    </div>
+    <div style="margin-left:auto;font-size:11px;color:var(--muted)" id="gi-live-badge" style="display:none"></div>
+  </div>
+
+  <!-- Live metric cards -->
+  <div class="metric-grid">
+
+    <!-- Utilisation -->
+    <div class="card">
+      <div class="card-title">GPU Utilisation</div>
+      <div class="card-value" id="val-util">—</div>
+      <div class="card-sub">GPU engine busy %</div>
+      <canvas class="sparkline" id="spark-util"></canvas>
+      <div class="gauge-wrap">
+        <div class="gauge-track"><div class="gauge-fill" id="gauge-util" style="width:0%"></div></div>
+        <span class="gauge-pct" id="gpct-util">0%</span>
+      </div>
+    </div>
+
+    <!-- VRAM -->
+    <div class="card">
+      <div class="card-title">VRAM</div>
+      <div class="card-value" id="val-vram" style="font-size:22px">—</div>
+      <div class="card-sub" id="sub-vram">Used / Total</div>
+      <canvas class="sparkline" id="spark-vram"></canvas>
+      <div class="gauge-wrap">
+        <div class="gauge-track"><div class="gauge-fill" id="gauge-vram" style="width:0%;background:var(--accent-mem)"></div></div>
+        <span class="gauge-pct" id="gpct-vram">0%</span>
+      </div>
+    </div>
+
+    <!-- Temperature -->
+    <div class="card">
+      <div class="card-title">Temperature</div>
+      <div class="card-value" id="val-temp" style="color:var(--accent-cpu)">—</div>
+      <div class="card-sub">Junction / hotspot</div>
+      <canvas class="sparkline" id="spark-temp"></canvas>
+      <div class="gauge-wrap">
+        <div class="gauge-track"><div class="gauge-fill" id="gauge-temp" style="width:0%;background:var(--accent-cpu)"></div></div>
+        <span class="gauge-pct" id="gpct-temp">0°C</span>
+      </div>
+    </div>
+
+    <!-- Power -->
+    <div class="card">
+      <div class="card-title">Power Draw</div>
+      <div class="card-value" id="val-power" style="color:#f78166">—</div>
+      <div class="card-sub">Average watts</div>
+      <canvas class="sparkline" id="spark-power"></canvas>
+      <div class="gauge-wrap">
+        <div class="gauge-track"><div class="gauge-fill" id="gauge-power" style="width:0%;background:#da3633"></div></div>
+        <span class="gauge-pct" id="gpct-power">0 W</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Clock speeds + details table -->
+  <div class="info-table">
+    <h3>Clock Speeds &amp; Details</h3>
+    <div class="info-row"><span>Core Clock</span><span id="det-core-clock">—</span></div>
+    <div class="info-row"><span>Memory Clock</span><span id="det-mem-clock">—</span></div>
+    <div class="info-row"><span>Fan Speed</span><span id="det-fan">—</span></div>
+    <div class="info-row"><span>VRAM Free</span><span id="det-vram-free">—</span></div>
+    <div class="info-row"><span>Mem Utilisation</span><span id="det-mem-util">—</span></div>
+    <div class="info-row"><span>UUID</span><span id="det-uuid" style="font-size:11px;font-family:monospace">—</span></div>
+  </div>
+</main>
+
+<footer>
+  Update interval <b>1 s</b> &nbsp;·&nbsp; Source: node-gpu (sysfs)
+</footer>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const fmt = (n, d=1) => (typeof n === 'number' ? n.toFixed(d) : '—');
+
+const HISTORY = 60;
+function makeRing() { return new Array(HISTORY).fill(0); }
+function pushRing(r, v) { r.push(v); if (r.length > HISTORY) r.shift(); }
+
+const rings = {
+  util:  makeRing(),
+  vram:  makeRing(),
+  temp:  makeRing(),
+  power: makeRing(),
+};
+
+const API = 'http://localhost:3000/api';
+
+function updateClock() {
+  $('clock').textContent = new Date().toLocaleTimeString();
+}
+
+function drawSparkline(canvas, data, color, fillHex, maxVal) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0) return;
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const max = maxVal || Math.max(...data, 1);
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75].forEach(f => {
+    ctx.beginPath(); ctx.moveTo(0, H*f); ctx.lineTo(W, H*f); ctx.stroke();
+  });
+
+  const pts = data.map((v, i) => [i / (data.length-1) * W, H - (v/max)*H*0.9 - H*0.05]);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, fillHex + '55');
+  grad.addColorStop(1, fillHex + '00');
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  pts.forEach(([x, y]) => ctx.lineTo(x, y));
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+async function update() {
+  updateClock();
+  try {
+    const r = await fetch(API + '/stats', { signal: AbortSignal.timeout(1400) });
+    if (!r.ok) return;
+    const d = await r.json();
+    const g = d.gpu;
+    if (!g) return;
+
+    // Identity (set once)
+    if ($('gi-name').textContent === 'Detecting…' || $('gi-name').textContent === '—') {
+      $('gi-name').textContent       = g.name   || 'AMD GPU';
+      $('gi-vendor').textContent     = g.vendor  || '—';
+      $('gi-vram-total').textContent = g.memoryTotalMB ? g.memoryTotalMB + ' MB' : '—';
+    }
+
+    // Rings
+    pushRing(rings.util,  g.utilizationGpu    ?? 0);
+    pushRing(rings.vram,  g.utilizationMemory ?? 0);
+    pushRing(rings.temp,  g.temperatureC      ?? 0);
+    pushRing(rings.power, g.powerW            ?? 0);
+
+    // Utilisation card
+    $('val-util').textContent  = fmt(g.utilizationGpu) + '%';
+    $('gauge-util').style.width = (g.utilizationGpu ?? 0) + '%';
+    $('gpct-util').textContent = fmt(g.utilizationGpu) + '%';
+
+    // VRAM card
+    const vramPct = g.memoryTotalMB ? Math.round(g.memoryUsedMB / g.memoryTotalMB * 100) : 0;
+    $('val-vram').textContent   = g.memoryUsedMB + ' MB';
+    $('sub-vram').textContent   = 'of ' + g.memoryTotalMB + ' MB (' + vramPct + '%)';
+    $('gauge-vram').style.width = vramPct + '%';
+    $('gpct-vram').textContent  = vramPct + '%';
+
+    // Temperature card
+    $('val-temp').textContent   = (g.temperatureC ?? '—') + ' °C';
+    const tempPct = Math.min(100, ((g.temperatureC ?? 0) / 110) * 100);
+    $('gauge-temp').style.width = tempPct + '%';
+    $('gpct-temp').textContent  = (g.temperatureC ?? 0) + '°C';
+
+    // Power card
+    $('val-power').textContent   = (g.powerW ?? '—') + ' W';
+    const powerPct = Math.min(100, ((g.powerW ?? 0) / 65) * 100);  // 65 W TDP for iGPU
+    $('gauge-power').style.width = powerPct + '%';
+    $('gpct-power').textContent  = (g.powerW ?? 0) + ' W';
+
+    // Details table
+    $('det-core-clock').textContent = g.coreClockMHz  ? g.coreClockMHz  + ' MHz' : '—';
+    $('det-mem-clock').textContent  = g.memoryClockMHz ? g.memoryClockMHz + ' MHz' : '—';
+    $('det-fan').textContent        = g.fanSpeedPct != null ? fmt(g.fanSpeedPct) + '%' : '—';
+    $('det-vram-free').textContent  = g.memoryFreeMB  ? g.memoryFreeMB + ' MB' : '—';
+    $('det-mem-util').textContent   = g.utilizationMemory != null ? fmt(g.utilizationMemory) + '%' : '—';
+    $('det-uuid').textContent       = d.gpu.uuid || '—';  // if ever available
+
+    // Sparklines
+    drawSparkline($('spark-util'),  rings.util,  'var(--accent-gpu)',  '#bf8700', 100);
+    drawSparkline($('spark-vram'),  rings.vram,  'var(--accent-mem)',  '#238636', 100);
+    drawSparkline($('spark-temp'),  rings.temp,  'var(--accent-cpu)',  '#1f6feb', 110);
+    drawSparkline($('spark-power'), rings.power, '#f78166',            '#da3633', 65);
+
+  } catch (e) {
+    // server not running — values stay at last known
+  }
+}
+
+update();
+setInterval(update, 1000);
+</script>
+</body>
+</html>

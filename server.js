@@ -6,6 +6,14 @@ const cors    = require("cors");
 const si      = require("systeminformation");
 const path    = require("path");
 
+// node-gpu: pure-sysfs AMD/NVIDIA/Intel native addon — ~0.1 ms per call, no subprocess
+let nodeGpu = null;
+try {
+  nodeGpu = require("./node-gpu/index");
+} catch (e) {
+  console.warn("node-gpu not available, GPU metrics will be empty:", e.message);
+}
+
 const app  = express();
 const PORT = 3000;
 
@@ -83,25 +91,49 @@ app.get("/api/stats", async (_req, res) => {
 
     // ── Processes ────────────────────────────────────────────────────────────
     const procs = (processes.list || [])
-      .filter(p => p.pcpu != null && p.pcpu >= 0)   // drop kernel threads with null cpu
-      .sort((a, b) => b.pcpu - a.pcpu)
+      .filter(p => p.cpu != null && p.cpu >= 0)
+      .sort((a, b) => b.cpu - a.cpu)
       .slice(0, 40)
       .map(p => ({
         pid:      p.pid,
         name:     p.name,
         cmd:      p.command || p.name,
-        cpu:      Math.round(p.pcpu  * 10) / 10,
-        memBytes: Math.round((p.mem_rss || 0) * 1024),
-        status:   p.state  || "—",
-        user:     p.user   || "—",
+        cpu:      Math.round(p.cpu    * 10) / 10,
+        memBytes: (p.memRss || 0) * 1024,  // memRss is in KB, convert to bytes
+        status:   p.state   || "—",
+        user:     p.user    || "—",
       }));
+
+    // ── GPU (node-gpu sysfs addon — ~0.1 ms, no subprocess) ─────────────────
+    let gpu = null;
+    if (nodeGpu) {
+      try {
+        const g = nodeGpu.getGpuInfo(0);
+        gpu = {
+          name:              g.name             || null,
+          vendor:            g.vendor           || null,
+          utilizationGpu:    Math.round(g.gpuUtilization    * 10) / 10,
+          utilizationMemory: Math.round(g.memoryUtilization * 10) / 10,
+          memoryUsedMB:      g.memoryUsed       || 0,
+          memoryTotalMB:     g.memoryTotal      || 0,
+          memoryFreeMB:      g.memoryFree       || 0,
+          temperatureC:      Math.round(g.temperature * 10) / 10,
+          powerW:            Math.round(g.powerUsage  * 10) / 10,
+          coreClockMHz:      g.coreClock        || 0,
+          memoryClockMHz:    g.memoryClock      || 0,
+          fanSpeedPct:       Math.round(g.fanSpeed     * 10) / 10,
+        };
+      } catch (e) {
+        console.warn("GPU read error:", e.message);
+      }
+    }
 
     // ── Battery (optional) ───────────────────────────────────────────────────
     const bat = battery.hasBattery
       ? { hasBattery: true, percent: battery.percent, isCharging: battery.isCharging }
       : { hasBattery: false };
 
-    res.json({ cpu, memory, disk, net, processes: procs, battery: bat, ts: Date.now() });
+    res.json({ cpu, memory, disk, net, processes: procs, gpu, battery: bat, ts: Date.now() });
   } catch (err) {
     console.error("stats error:", err.message);
     res.status(500).json({ error: err.message });

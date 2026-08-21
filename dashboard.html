@@ -460,22 +460,22 @@
         <div class="info-row"><span>Total transferred</span><span id="net-total">—</span></div>
       </div>
 
-      <!-- GPU (simulated) -->
-      <div class="card">
+      <!-- GPU -->
+      <div class="card" style="cursor:pointer;position:relative" id="gpu-card" onclick="window.open('gpu.html','_blank')">
         <div class="card-header">
           <span class="card-title color-gpu">GPU</span>
-          <span class="card-sub">WebGL renderer</span>
+          <span class="card-sub" id="gpu-name" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Detecting…</span>
         </div>
         <div class="card-value color-gpu" id="ov-gpu">—</div>
-        <div class="card-sub" id="gpu-name">Detecting…</div>
+        <div class="card-sub">Utilisation · <a href="gpu.html" target="_blank" style="color:var(--accent-gpu);font-size:11px;text-decoration:none">Details ↗</a></div>
         <canvas class="sparkline" id="spark-gpu"></canvas>
         <div class="gauge-wrap">
           <div class="gauge-track"><div class="gauge-fill fill-gpu" id="gauge-gpu" style="width:0%"></div></div>
           <span class="gauge-pct" id="gp-gpu">0%</span>
         </div>
-        <div class="info-row"><span>Renderer</span><span id="gpu-renderer">—</span></div>
-        <div class="info-row"><span>Vendor</span><span id="gpu-vendor">—</span></div>
-        <div class="info-row"><span>VRAM (est.)</span><span id="gpu-vram">—</span></div>
+        <div class="info-row"><span>VRAM used</span><span id="gpu-vram-used">—</span></div>
+        <div class="info-row"><span>Temperature</span><span id="gpu-temp">—</span></div>
+        <div class="info-row"><span>Power</span><span id="gpu-power">—</span></div>
       </div>
 
       <!-- Browser / JS Heap -->
@@ -663,7 +663,7 @@ const state = {
   mem:  { pct: 0, usedBytes: 0, totalBytes: 0, ring: makeRing() },
   disk: { readBps: 0, writeBps: 0, pct: 0, ring: makeRing() },
   net:  { dlBps: 0, ulBps: 0, pct: 0, totalBytes: 0, ring: makeRing(), dlRing: makeRing(), ulRing: makeRing() },
-  gpu:  { pct: 0, ring: makeRing() },
+  gpu:  { pct: 0, memPct: 0, memUsedMB: 0, memTotalMB: 0, tempC: 0, powerW: 0, coreClockMHz: 0, memClockMHz: 0, name: '—', vendor: '—', ring: makeRing(), tempRing: makeRing(), powerRing: makeRing() },
   heap: { usedBytes: 0, totalBytes: 0, limitBytes: 0, ring: makeRing() },
 };
 
@@ -704,13 +704,7 @@ function applyStaticInfo(d) {
     $('cpu-threads').textContent = c.physicalCores || '—';
     $('cpu-arch').textContent    = d.os?.arch      || navigator.platform || '—';
   }
-  if (d.gpu && d.gpu[0]) {
-    const g = d.gpu[0];
-    $('gpu-renderer').textContent = g.model  || '—';
-    $('gpu-vendor').textContent   = g.vendor || '—';
-    $('gpu-name').textContent     = (g.model || '—').substring(0, 40);
-    $('gpu-vram').textContent     = g.vram ? g.vram + ' MB' : '—';
-  }
+  // gpu-name, vram etc. are now populated from live /api/stats gpu data
   if (d.os) {
     $('cpu-arch').textContent = d.os.arch || navigator.platform || '—';
   }
@@ -972,12 +966,12 @@ function renderPerfDetail() {
       <div class="perf-stat"><div class="ps-label">User agent</div><div class="ps-value" style="font-size:10px;line-height:1.4">${(navigator.userAgent||'').split(' ').slice(0,3).join(' ')}</div></div>
     `;
   } else if (m==='mem') {
-    ring = state.heap.ring; maxVal = state.heap.limitBytes;
+    ring = state.mem.ring; maxVal = 100;
     statsHtml = `
-      <div class="perf-stat"><div class="ps-label">JS Heap Used</div><div class="ps-value color-mem">${fmtBytes(state.heap.usedBytes)}</div></div>
-      <div class="perf-stat"><div class="ps-label">JS Heap Total</div><div class="ps-value">${fmtBytes(state.heap.totalBytes)}</div></div>
-      <div class="perf-stat"><div class="ps-label">Heap Limit</div><div class="ps-value">${fmtBytes(state.heap.limitBytes)}</div></div>
-      <div class="perf-stat"><div class="ps-label">Device RAM</div><div class="ps-value">${navigator.deviceMemory ? navigator.deviceMemory+' GB' : '—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">RAM Used</div><div class="ps-value color-mem">${fmtBytes(state.mem.usedBytes)}</div></div>
+      <div class="perf-stat"><div class="ps-label">RAM Total</div><div class="ps-value">${fmtBytes(state.mem.totalBytes)}</div></div>
+      <div class="perf-stat"><div class="ps-label">Utilisation</div><div class="ps-value">${fmt(state.mem.pct)}%</div></div>
+      <div class="perf-stat"><div class="ps-label">JS Heap Used</div><div class="ps-value">${fmtBytes(state.heap.usedBytes)}</div></div>
     `;
   } else if (m==='net') {
     ring = state.net.ring; maxVal = null;
@@ -995,11 +989,13 @@ function renderPerfDetail() {
     `;
   } else {
     ring = state.gpu.ring; maxVal = 100;
-    const gi = getGPUInfo();
     statsHtml = `
-      <div class="perf-stat"><div class="ps-label">GPU Load (est.)</div><div class="ps-value color-gpu">${fmt(state.gpu.pct)}%</div></div>
-      <div class="perf-stat"><div class="ps-label">Renderer</div><div class="ps-value" style="font-size:10px;line-height:1.4">${gi.renderer}</div></div>
-      <div class="perf-stat"><div class="ps-label">Vendor</div><div class="ps-value" style="font-size:10px;line-height:1.4">${gi.vendor}</div></div>
+      <div class="perf-stat"><div class="ps-label">GPU Utilisation</div><div class="ps-value color-gpu">${state.gpu.pct > 0 || liveData ? fmt(state.gpu.pct)+'%' : '—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">VRAM Used</div><div class="ps-value">${state.gpu.memTotalMB ? state.gpu.memUsedMB+' / '+state.gpu.memTotalMB+' MB' : '—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">Temperature</div><div class="ps-value">${state.gpu.tempC ? state.gpu.tempC+'°C' : '—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">Power</div><div class="ps-value">${state.gpu.powerW ? state.gpu.powerW+' W' : '—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">Core Clock</div><div class="ps-value">${state.gpu.coreClockMHz ? state.gpu.coreClockMHz+' MHz' : '—'}</div></div>
+      <div class="perf-stat"><div class="ps-label">Mem Clock</div><div class="ps-value">${state.gpu.memClockMHz ? state.gpu.memClockMHz+' MHz' : '—'}</div></div>
     `;
   }
   drawBigChart($('pd-canvas'), ring, color, fill, maxVal);
@@ -1056,11 +1052,7 @@ function initStaticInfo() {
   $('cpu-cores-label').textContent = cores + ' cores';
   const ramBytes = navigator.deviceMemory ? navigator.deviceMemory * 1024 ** 3 : null;
   $('mem-total').textContent = ramBytes ? fmtBytes(ramBytes) : '—';
-  const gi = getGPUInfo();
-  $('gpu-renderer').textContent = gi.renderer;
-  $('gpu-vendor').textContent   = gi.vendor;
-  $('gpu-name').textContent     = gi.renderer.split('/')[0].trim().substring(0, 40);
-  $('gpu-vram').textContent     = '—';
+  // gpu-name is populated on first live stats tick
 }
 
 // ─────────────────────────────────────────────────
@@ -1127,10 +1119,23 @@ async function update() {
   pushRing(state.net.dlRing, dlBps);
   pushRing(state.net.ulRing, ulBps);
 
-  // ── GPU (systeminformation doesn't expose live load on all platforms) ──
-  // Keep as 0 / display '—' when real data unavailable
-  state.gpu.pct = 0;
-  pushRing(state.gpu.ring, 0);
+  // ── GPU (via node-gpu sysfs addon) ────────────────────────────────────────
+  if (liveData && liveData.gpu) {
+    const g = liveData.gpu;
+    state.gpu.pct          = g.utilizationGpu    ?? 0;
+    state.gpu.memPct       = g.utilizationMemory ?? 0;
+    state.gpu.memUsedMB    = g.memoryUsedMB      ?? 0;
+    state.gpu.memTotalMB   = g.memoryTotalMB     ?? 0;
+    state.gpu.tempC        = g.temperatureC      ?? 0;
+    state.gpu.powerW       = g.powerW            ?? 0;
+    state.gpu.coreClockMHz = g.coreClockMHz      ?? 0;
+    state.gpu.memClockMHz  = g.memoryClockMHz    ?? 0;
+    state.gpu.name         = g.name              ?? '—';
+    state.gpu.vendor       = g.vendor            ?? '—';
+  }
+  pushRing(state.gpu.ring,    state.gpu.pct);
+  pushRing(state.gpu.tempRing,  state.gpu.tempC);
+  pushRing(state.gpu.powerRing, state.gpu.powerW);
 
   // ── Processes ─────────────────────────────────
   if (liveData && liveData.processes.length) {
@@ -1194,9 +1199,20 @@ async function update() {
   $('net-detail-label').textContent = 'Download: ' + fmtBytes(dlBps, true) + '  Upload: ' + fmtBytes(ulBps, true);
 
   // GPU card
-  $('ov-gpu').textContent        = liveData ? '—' : '—';
-  $('gauge-gpu').style.width     = '0%';
-  $('gp-gpu').textContent        = '—';
+  if (liveData && liveData.gpu) {
+    const g = liveData.gpu;
+    $('ov-gpu').textContent    = fmt(g.utilizationGpu) + '%';
+    $('gauge-gpu').style.width = g.utilizationGpu + '%';
+    $('gp-gpu').textContent    = fmt(g.utilizationGpu) + '%';
+    $('gpu-name').textContent  = (g.name || '—').substring(0, 40);
+    $('gpu-vram-used').textContent = g.memoryUsedMB + ' / ' + g.memoryTotalMB + ' MB';
+    $('gpu-temp').textContent  = g.temperatureC + ' °C';
+    $('gpu-power').textContent = g.powerW + ' W';
+  } else {
+    $('ov-gpu').textContent    = '—';
+    $('gauge-gpu').style.width = '0%';
+    $('gp-gpu').textContent    = '—';
+  }
 
   // JS Heap card
   $('ov-heap').textContent       = fmtBytes(heap.used);
@@ -1211,7 +1227,7 @@ async function update() {
   $('pni-mem').textContent       = fmtBytes(ramUsed);
   $('pni-net').textContent       = fmtBytes(netTotal, true);
   $('pni-disk').textContent      = fmtBytes(diskTot, true);
-  $('pni-gpu').textContent       = '—';
+  $('pni-gpu').textContent       = liveData && liveData.gpu ? fmt(liveData.gpu.utilizationGpu) + '%' : '—';
 
   // Footer
   $('ft-procs').textContent      = processes.length;
