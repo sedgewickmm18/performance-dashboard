@@ -1,0 +1,11 @@
+[build]
+# Cap parallel rustc invocations. With codegen-units=4 each rustc process can
+# consume ~1-2 GB RSS; 8 parallel jobs → ~16 GB peak, well within the 121 GB
+# available while leaving headroom for the rest of the system.
+jobs = 8
+rustc-wrapper = "/home/markus/.cargo/bin/sccache"
+
+[target.x86_64-unknown-linux-gnu]
+# mold is faster than lld on Linux (parallel section merging).
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]

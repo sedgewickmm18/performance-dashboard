@@ -670,28 +670,25 @@ const state = {
 // ─────────────────────────────────────────────────
 // API backend integration
 // ─────────────────────────────────────────────────
-const API = 'http://localhost:3000/api';
-let apiAvailable = false;   // set to true on first successful fetch
-let liveData = null;        // last /api/stats payload
+let liveData = null;        // last get_stats payload
 
-// Probe once; if it fails stay in browser-only mode
+// ─── Tauri IPC backend ───────────────────────────────────────────────────────
 async function probeAPI() {
   try {
-    const r = await fetch(API + '/static', { signal: AbortSignal.timeout(1500) });
-    if (!r.ok) return;
-    const d = await r.json();
-    apiAvailable = true;
+    const d = await window.__TAURI__.core.invoke('get_static_info');
     applyStaticInfo(d);
-  } catch { /* server not running — silent fallback */ }
+  } catch (e) {
+    console.warn('Tauri get_static_info failed:', e);
+  }
 }
 
 async function fetchStats() {
-  if (!apiAvailable) return null;
   try {
-    const r = await fetch(API + '/stats', { signal: AbortSignal.timeout(1400) });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
+    return await window.__TAURI__.core.invoke('get_stats');
+  } catch (e) {
+    console.warn('Tauri get_stats failed:', e);
+    return null;
+  }
 }
 
 // Populate one-shot labels from /api/static

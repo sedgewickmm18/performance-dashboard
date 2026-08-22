@@ -279,8 +279,6 @@ const rings = {
   power: makeRing(),
 };
 
-const API = 'http://localhost:3000/api';
-
 function updateClock() {
   $('clock').textContent = new Date().toLocaleTimeString();
 }
@@ -327,9 +325,7 @@ function drawSparkline(canvas, data, color, fillHex, maxVal) {
 async function update() {
   updateClock();
   try {
-    const r = await fetch(API + '/stats', { signal: AbortSignal.timeout(1400) });
-    if (!r.ok) return;
-    const d = await r.json();
+    const d = await window.__TAURI__.core.invoke('get_stats');
     const g = d.gpu;
     if (!g) return;
 
@@ -385,7 +381,7 @@ async function update() {
     drawSparkline($('spark-power'), rings.power, '#f78166',            '#da3633', 65);
 
   } catch (e) {
-    // server not running — values stay at last known
+    console.warn('Tauri get_stats failed:', e);
   }
 }
 

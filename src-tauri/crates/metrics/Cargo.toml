@@ -1,0 +1,16 @@
+[package]
+name = "metrics"
+version = "0.1.0"
+edition = "2021"
+
+# No tauri dependency here — pure Rust + serde + tokio only.
+# This keeps `cargo check -p metrics` and `cargo test -p metrics`
+# completely free of the webkit2gtk / WRY / GTK stack.
+[dependencies]
+serde       = { version = "1.0", features = ["derive"] }
+serde_json  = "1.0"
+tokio       = { version = "1", features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+libc        = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
