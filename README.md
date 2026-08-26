@@ -33,7 +33,7 @@ Let your coding agent, for example IBM Bob, set it up for you with the following
 
 ---
 
-## Tauri desktop application
+### Tauri desktop application
 
 A fully self-contained native desktop variant of the dashboard (Linux only).
 No Node.js, no Express server — all metrics are collected directly from the Linux
