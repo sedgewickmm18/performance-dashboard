@@ -18,7 +18,7 @@ const app  = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.static(path.join(__dirname)));   // serve dashboard.html, etc.
+app.use(express.static(path.join(__dirname, "dist")));   // serve dist/dashboard.html, etc.
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function pick(obj, keys) {

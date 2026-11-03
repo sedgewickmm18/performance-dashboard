@@ -3,8 +3,9 @@
   "productName": "system-dashboard",
   "version": "0.1.0",
   "identifier": "com.dashboard",
+  "mainBinaryName": "system-dashboard",
   "build": {
-    "frontendDist": "../"
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,

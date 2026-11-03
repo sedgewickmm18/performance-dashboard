@@ -8,25 +8,26 @@ resolver = "2"
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
+description = "Real-time Linux system performance dashboard (CPU, memory, disk, network, GPU, battery)"
 authors = ["you"]
 license = ""
 repository = ""
 edition = "2021"
-rust-version = "1.77.2"
+# tauri 2.12 raised its MSRV to 1.90
+rust-version = "1.90"
 
 [lib]
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.4", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde      = { version = "1.0", features = ["derive"] }
 tokio      = { version = "1", features = ["rt", "rt-multi-thread", "time", "macros"] }
-tauri      = { version = "2.10.0", features = [] }
+tauri      = { version = "2.12.5", features = [] }
 metrics    = { path = "crates/metrics" }
 
 # ── Build profiles ─────────────────────────────────────────────────────────────

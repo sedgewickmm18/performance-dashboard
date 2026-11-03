@@ -103,6 +103,21 @@ src-tauri/target/release/bundle/
 └── appimage/  system-dashboard_*.AppImage
 ```
 
+### Build an RPM (Fedora / RHEL / openSUSE)
+
+```bash
+./build-rpm.sh
+```
+
+Uses Tauri v2's native RPM bundler — it generates the `.desktop` launcher,
+hicolor icons and the runtime requirements (`webkit2gtk4.1`, `gtk3`, …)
+automatically, so no `.spec` file is needed. The script prints package
+info, contents and a checksum, then you install with:
+
+```bash
+sudo dnf install src-tauri/target/release/bundle/rpm/system-dashboard-*.rpm
+```
+
 ### Run tests (fast — no webkit2gtk required)
 
 All metric logic lives in `src-tauri/crates/metrics/` — a standalone crate with
@@ -123,6 +138,11 @@ cargo nextest run -p metrics
 ### Architecture
 
 ```
+dist/                             web assets — shared by the Node dev server and
+│                                 the Tauri bundle (frontendDist)
+├── dashboard.html
+├── gpu.html
+└── presentation.html
 src-tauri/
 ├── src/lib.rs                   Tauri command layer (get_stats, get_static_info, get_battery)
 └── crates/metrics/src/metrics/
