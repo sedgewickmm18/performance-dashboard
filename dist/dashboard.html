@@ -461,13 +461,13 @@
       </div>
 
       <!-- GPU -->
-      <div class="card" style="cursor:pointer;position:relative" id="gpu-card" onclick="window.open('gpu.html','_blank')">
-        <div class="card-header">
+      <div class="card" style="cursor:pointer;position:relative" id="gpu-card" onclick="openGpuDetails()">
+        <div class="card-head">
           <span class="card-title color-gpu">GPU</span>
           <span class="card-sub" id="gpu-name" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Detecting…</span>
         </div>
         <div class="card-value color-gpu" id="ov-gpu">—</div>
-        <div class="card-sub">Utilisation · <a href="gpu.html" target="_blank" style="color:var(--accent-gpu);font-size:11px;text-decoration:none">Details ↗</a></div>
+        <div class="card-sub">Utilisation · <a href="gpu.html" target="_blank" onclick="event.preventDefault();event.stopPropagation();openGpuDetails()" style="color:var(--accent-gpu);font-size:11px;text-decoration:none">Details ↗</a></div>
         <canvas class="sparkline" id="spark-gpu"></canvas>
         <div class="gauge-wrap">
           <div class="gauge-track"><div class="gauge-fill fill-gpu" id="gauge-gpu" style="width:0%"></div></div>
@@ -688,6 +688,34 @@ async function fetchStats() {
   } catch (e) {
     console.warn('Tauri get_stats failed:', e);
     return null;
+  }
+}
+
+// ─── GPU detail page ─────────────────────────────────────────────────────────
+// window.open() / target="_blank" are no-ops inside Tauri (WebKitGTK does not
+// grant new-window requests), so in the desktop app the details open in a
+// native WebviewWindow instead; in the browser they open in a new tab.
+async function openGpuDetails() {
+  if (!window.__TAURI__) {
+    window.open('gpu.html', '_blank');
+    return;
+  }
+  try {
+    const { WebviewWindow } = window.__TAURI__.webviewWindow;
+    const existing = await WebviewWindow.getByLabel('gpu');
+    if (existing) {
+      await existing.setFocus();
+      return;
+    }
+    new WebviewWindow('gpu', {
+      url: 'gpu.html',
+      title: 'GPU Detail',
+      width: 880,
+      height: 720,
+      resizable: true,
+    });
+  } catch (e) {
+    console.warn('Failed to open GPU detail window:', e);
   }
 }
 
@@ -1201,10 +1229,10 @@ async function update() {
     $('ov-gpu').textContent    = fmt(g.utilizationGpu) + '%';
     $('gauge-gpu').style.width = g.utilizationGpu + '%';
     $('gp-gpu').textContent    = fmt(g.utilizationGpu) + '%';
-    $('gpu-name').textContent  = (g.name || '—').substring(0, 40);
+    $('gpu-name').textContent  = (g.name || 'AMD GPU').substring(0, 40);
     $('gpu-vram-used').textContent = g.memoryUsedMB + ' / ' + g.memoryTotalMB + ' MB';
-    $('gpu-temp').textContent  = g.temperatureC + ' °C';
-    $('gpu-power').textContent = g.powerW + ' W';
+    $('gpu-temp').textContent  = fmt(g.temperatureC) + ' °C';
+    $('gpu-power').textContent = fmt(g.powerW) + ' W';
   } else {
     $('ov-gpu').textContent    = '—';
     $('gauge-gpu').style.width = '0%';

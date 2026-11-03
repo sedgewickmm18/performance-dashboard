@@ -48,7 +48,7 @@ kernel by a Rust backend and delivered to the frontend via Tauri IPC (`invoke`).
 | Disk I/O rates | `/proc/diskstats` |
 | Network throughput | `/proc/net/dev` |
 | Top-40 processes by CPU | `/proc/[pid]/stat` + `/proc/[pid]/cmdline` |
-| AMD GPU (utilisation, VRAM, temp, power, clocks, fan) | `/sys/class/drm/card*/device/` |
+| AMD GPU (utilisation, VRAM+GTT, temps, power+cap, clocks, fan, PCIe link) | `/sys/class/drm/card*/device/`, hwdata `pci.ids` |
 | Battery | `/sys/class/power_supply/BAT*/` |
 | Static info (CPU model, OS, mounted disks) | `/proc/cpuinfo`, `/etc/os-release`, `statvfs` |
 
@@ -124,7 +124,7 @@ All metric logic lives in `src-tauri/crates/metrics/` — a standalone crate wit
 zero GTK/Tauri dependencies. Checks and tests complete in seconds:
 
 ```bash
-./build-test.sh          # run all 37 unit tests  (~3 s)
+./build-test.sh          # run all 50 unit tests  (~3 s)
 ./build-test.sh check    # type-check only         (~8 s)
 ```
 
@@ -151,7 +151,7 @@ src-tauri/
     ├── disk.rs                  /proc/diskstats
     ├── network.rs               /proc/net/dev
     ├── processes.rs             /proc/[pid]/stat
-    ├── gpu_amd.rs               /sys/class/drm/card*/device/
+    ├── gpu_amd.rs               /sys/class/drm/card*/device/ (amdgpu_top-style sensors)
     ├── battery.rs               /sys/class/power_supply/BAT*/
     └── static_info.rs           /proc/cpuinfo, /etc/os-release, statvfs
 ```
